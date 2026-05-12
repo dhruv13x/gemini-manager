@@ -21,13 +21,9 @@ def blend(c1, c2, t):
     return f"#{r:02x}{g:02x}{b:02x}"
 
 def print_logo():
-    import os
-    import random
-    import sys
     import colorsys
     import math
     from rich.console import Console
-    from rich.text import Text
 
     console = Console()
 

@@ -6,12 +6,10 @@ check_b2.py
 
 Verifies Backblaze B2 credentials and bucket access.
 """
-import os
 import sys
 import argparse
 from .ui import cprint, NEON_GREEN, NEON_RED
 from .b2 import B2Manager
-from .settings import get_setting
 from .credentials import resolve_credentials
 
 def perform_check_b2(args: argparse.Namespace):

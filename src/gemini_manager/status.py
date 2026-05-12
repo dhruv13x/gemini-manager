@@ -1,8 +1,7 @@
 import re
 import subprocess
 import time
-import sys
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional
 
 SESSION = "gemini_capture_status"
 COLS, ROWS = 120, 40
@@ -132,7 +131,7 @@ def get_live_status() -> Optional[Dict]:
     return result
 
 from .ui import cprint, console, Table
-from .config import NEON_CYAN, NEON_GREEN, NEON_YELLOW, NEON_RED
+from .config import NEON_CYAN, NEON_GREEN, NEON_RED
 
 def do_status(args=None):
     if args and getattr(args, 'cloud', False):

@@ -11,7 +11,6 @@ import sys
 import argparse
 from .ui import cprint, NEON_CYAN, NEON_YELLOW, NEON_RED
 from .b2 import B2Manager
-from .settings import get_setting
 from .config import DEFAULT_BACKUP_DIR, OLD_CONFIGS_DIR
 from .credentials import resolve_credentials
 

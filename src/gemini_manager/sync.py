@@ -10,11 +10,8 @@ Features:
 """
 import os
 import sys
-import argparse
 from .ui import cprint, NEON_GREEN, NEON_CYAN, NEON_YELLOW, NEON_RED, NEON_MAGENTA
 from .cloud_factory import get_cloud_provider
-from .credentials import resolve_credentials
-from .ui import console
 
 def get_local_backups(backup_dir):
     """Returns a set of local backup filenames (only .tar.gz)."""

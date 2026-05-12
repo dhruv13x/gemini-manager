@@ -1,8 +1,7 @@
 from rich.prompt import Prompt
 from gemini_manager.settings import set_setting
 from gemini_manager.ui import cprint
-from gemini_manager.config import NEON_CYAN, NEON_GREEN, NEON_YELLOW, NEON_RED, DEFAULT_BACKUP_DIR
-import os
+from gemini_manager.config import NEON_CYAN, NEON_GREEN, NEON_YELLOW, DEFAULT_BACKUP_DIR
 
 def run_wizard():
     """

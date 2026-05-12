@@ -24,12 +24,11 @@ from typing import Tuple, Optional, List, Dict, Any
 import json
 import os
 import re
-import sys
 import uuid
 import subprocess
 
 from .ui import banner, cprint
-from .config import NEON_CYAN, NEON_YELLOW, NEON_GREEN, NEON_RED, RESET, RESETS_FILE
+from .config import NEON_CYAN, NEON_YELLOW, NEON_GREEN, NEON_RED, RESETS_FILE
 
 # Keep ISO timestamps in UTC for exact comparisons
 
@@ -452,39 +451,61 @@ def remove_entry_by_id(id_or_email: str) -> bool:
 # ------------------------
 def add_24h_cooldown_for_email(email: str) -> Dict[str, Any]:
     """
-    Manually adds a 24-hour cooldown for the given email starting NOW.
-    Used when switching OUT of an account.
-    Calculates reset time as first_used + 24h if possible, otherwise now + 24h.
+    Adds a cooldown for the given email.
+    It primarily tries to fetch accurate model reset times via get_live_status().
+    If that fails, it falls back to 24h calculation (first_used + 24h or now + 24h).
     """
     now = _now_local()
-    reset_dt = now + timedelta(hours=24)
+    reset_dt = None
+    saved_string = "Auto-detected 24h cooldown on account switch"
 
-    # Try to honor the 24h rolling window from the FIRST use of the session
     try:
-        # Local import to avoid circular dependency with cooldown.py
-        from .cooldown import get_cooldown_data
-        cd_data = get_cooldown_data()
-        if email in cd_data:
-            entry = cd_data[email]
-            first_used_str = entry.get("first_used") if isinstance(entry, dict) else entry
-            if first_used_str:
-                first_ts = datetime.fromisoformat(first_used_str)
-                if first_ts.tzinfo is None:
-                    first_ts = first_ts.astimezone()
-                
-                candidate_reset = first_ts + timedelta(hours=24)
-                # If the 24h window from first_used is still in the future, use it.
-                # If it's already passed, it means the session exceeded 24h or first_used is stale,
-                # so we fall back to the default now + 24h to ensure the account is locked after switch-out.
-                if candidate_reset > now:
-                    reset_dt = candidate_reset
+        from .status import get_live_status
+        status = get_live_status()
+        if status and status.get("email") == email:
+            max_timedelta = None
+            for m_data in status["models"].values():
+                h, m = m_data.get("reset_h"), m_data.get("reset_m")
+                if h is not None and m is not None:
+                    td = timedelta(hours=h, minutes=m)
+                    if max_timedelta is None or td > max_timedelta:
+                        max_timedelta = td
+
+            if max_timedelta is not None:
+                reset_dt = now + max_timedelta
+                saved_string = "Accurate live cooldown detected"
     except Exception:
         pass
+
+    if reset_dt is None:
+        reset_dt = now + timedelta(hours=24)
+
+        # Try to honor the 24h rolling window from the FIRST use of the session
+        try:
+            # Local import to avoid circular dependency with cooldown.py
+            from .cooldown import get_cooldown_data
+            cd_data = get_cooldown_data()
+            if email in cd_data:
+                entry = cd_data[email]
+                first_used_str = entry.get("first_used") if isinstance(entry, dict) else entry
+                if first_used_str:
+                    first_ts = datetime.fromisoformat(first_used_str)
+                    if first_ts.tzinfo is None:
+                        first_ts = first_ts.astimezone()
+
+                    candidate_reset = first_ts + timedelta(hours=24)
+                    # If the 24h window from first_used is still in the future, use it.
+                    # If it's already passed, it means the session exceeded 24h or first_used is stale,
+                    # so we fall back to the default now + 24h to ensure the account is locked after switch-out.
+                    if candidate_reset > now:
+                        reset_dt = candidate_reset
+        except Exception:
+            pass
 
     entry = {
         "id": str(uuid.uuid4())[:8],
         "email": email,
-        "saved_string": "Auto-detected 24h cooldown on account switch",
+        "saved_string": saved_string,
         "reset_ist": reset_dt.isoformat(),
         "saved_at": now.isoformat()
     }

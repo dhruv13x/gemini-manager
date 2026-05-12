@@ -476,7 +476,8 @@ def test_do_list_resets_exception(fs, capsys):
     # It prints raw string if parse fails
     assert "bad-date" in captured.out
 
-def test_add_24h_cooldown_for_email_default(fs, capsys):
+@patch("gemini_manager.status.get_live_status", return_value=None)
+def test_add_24h_cooldown_for_email_default(mock_get_live_status, fs, capsys):
     # Tests default behavior when no cooldown data exists (now + 24h)
     with patch("gemini_manager.reset_helpers._save_store") as mock_save:
         reset_helpers.add_24h_cooldown_for_email("test@example.com")
@@ -484,7 +485,23 @@ def test_add_24h_cooldown_for_email_default(fs, capsys):
     captured = capsys.readouterr()
     assert "Started 24h cooldown for test@example.com" in captured.out
 
-def test_add_24h_cooldown_for_email_with_first_used(fs, capsys):
+@patch("gemini_manager.status.get_live_status")
+def test_add_24h_cooldown_for_email_with_exact_live_status(mock_get_live_status, fs, capsys):
+    # Tests exact behavior when exact reset times are provided
+    mock_get_live_status.return_value = {
+        "email": "test@example.com",
+        "models": {
+            "Flash": {"reset_h": 2, "reset_m": 30},
+            "Pro": {"reset_h": 3, "reset_m": 15}
+        }
+    }
+    with patch("gemini_manager.reset_helpers._save_store") as mock_save:
+        entry = reset_helpers.add_24h_cooldown_for_email("test@example.com")
+        assert entry["saved_string"] == "Accurate live cooldown detected"
+        mock_save.assert_called()
+
+@patch("gemini_manager.status.get_live_status", return_value=None)
+def test_add_24h_cooldown_for_email_with_first_used(mock_get_live_status, fs, capsys):
     # Tests that reset_dt = first_used + 24h if in future
     from gemini_manager.config import COOLDOWN_FILE
     now = datetime.now().astimezone()

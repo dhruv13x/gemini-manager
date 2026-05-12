@@ -4,9 +4,9 @@
 import os
 import json
 import datetime
-from typing import Dict, Optional
+from typing import Dict
 
-from .ui import cprint, console, NEON_CYAN, NEON_GREEN, NEON_YELLOW, NEON_RED, RESET
+from .ui import cprint, console, NEON_CYAN, NEON_GREEN, NEON_YELLOW, NEON_RED
 from .b2 import B2Manager
 from .credentials import resolve_credentials
 from .reset_helpers import get_all_resets, remove_entry_by_id, sync_resets_with_cloud
@@ -59,7 +59,7 @@ def do_reset_all(args):
             b2.upload_string("[]", "gm-resets.json")
             
             cprint(NEON_GREEN, "[OK] Cloud data wiped successfully.")
-    except Exception as e:
+    except Exception:
         # Creds might not be set, usually fine to skip silent unless explicitly requested
         pass
 
@@ -126,7 +126,7 @@ from rich.panel import Panel
 from rich.align import Align
 
 
-from .config import NEON_CYAN, NEON_YELLOW, NEON_GREEN, NEON_RED, RESET, COOLDOWN_FILE
+from .config import NEON_CYAN, NEON_YELLOW, NEON_GREEN, NEON_RED, COOLDOWN_FILE
 
 # File to store cooldown data
 CLOUD_COOLDOWN_FILENAME = "gm-cooldown.json"
