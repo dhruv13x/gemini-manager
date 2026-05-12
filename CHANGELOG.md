@@ -1,5 +1,9 @@
 # Changelog
 
+## [18.0.0] - 2026-05-12
+### Other Changes
+- update
+
 ## [17.0.0] - 2026-04-01
 ### Features
 - **chat:** backup latest session per project and restore all projects
