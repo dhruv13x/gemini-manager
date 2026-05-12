@@ -15,7 +15,8 @@ def mock_profile_deps(fs, mocker):
     mocker.patch("gemini_manager.profile.Confirm.ask", return_value=True) # Default to 'yes' for prompts
     
     # Setup default GEMINI_HOME for tests
-    fs.create_dir(DEFAULT_GEMINI_HOME)
+    if not os.path.exists(DEFAULT_GEMINI_HOME):
+        fs.create_dir(DEFAULT_GEMINI_HOME)
     yield mock_console_print # Yield the mock object for console.print
 
 # --- do_profile tests ---
