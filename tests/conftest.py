@@ -20,11 +20,9 @@ def mock_gemini_home(fs):
     default_gemini_home = os.path.join(fake_home, ".gemini")
 
     # Create directories in fake fs
-    fs.create_dir(gemini_cli_home)
-    fs.create_dir(default_backup_dir)
-    fs.create_dir(chat_history_backup_path)
-    fs.create_dir(old_configs_dir)
-    fs.create_dir(default_gemini_home)
+    for d in [gemini_cli_home, default_backup_dir, chat_history_backup_path, old_configs_dir, default_gemini_home]:
+        if not os.path.exists(d):
+            fs.create_dir(d)
 
     # Patch the constants in config.py
     with patch("gemini_manager.config.GEMINI_CLI_HOME", gemini_cli_home), \

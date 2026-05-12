@@ -118,14 +118,16 @@ from gemini_manager.config import COOLDOWN_FILE
 
 def test_get_recommendation_no_data(fs):
     """Test when no data exists."""
-    fs.create_dir(os.path.expanduser("~"))
+    if not os.path.exists(os.path.expanduser("~")):
+        fs.create_dir(os.path.expanduser("~"))
     with patch("gemini_manager.recommend.get_all_resets", return_value=[]):
         rec = get_recommendation()
         assert rec is None
 
 def test_get_recommendation_all_locked(fs):
     """Test when all accounts are locked (Cooldown)."""
-    fs.create_dir(os.path.expanduser("~"))
+    if not os.path.exists(os.path.expanduser("~")):
+        fs.create_dir(os.path.expanduser("~"))
     cooldown_path = os.path.expanduser(COOLDOWN_FILE)
     now = datetime.now(timezone.utc)
     recent = (now - timedelta(hours=1)).isoformat()
@@ -138,7 +140,8 @@ def test_get_recommendation_all_locked(fs):
 
 def test_get_recommendation_ready_sort_lru(fs):
     """Test picking the LRU ready account."""
-    fs.create_dir(os.path.expanduser("~"))
+    if not os.path.exists(os.path.expanduser("~")):
+        fs.create_dir(os.path.expanduser("~"))
     cooldown_path = os.path.expanduser(COOLDOWN_FILE)
     now = datetime.now(timezone.utc)
 
@@ -159,7 +162,8 @@ def test_get_recommendation_ready_sort_lru(fs):
 
 def test_get_recommendation_never_used_first(fs):
     """Test that never used accounts come before used ones."""
-    fs.create_dir(os.path.expanduser("~"))
+    if not os.path.exists(os.path.expanduser("~")):
+        fs.create_dir(os.path.expanduser("~"))
     cooldown_path = os.path.expanduser(COOLDOWN_FILE)
     now = datetime.now(timezone.utc)
     old = (now - timedelta(days=10)).isoformat()
@@ -181,7 +185,8 @@ def test_get_recommendation_scheduled_ignored(fs):
     # Logic: Status: READY > SCHEDULED > COOLDOWN.
     # Candidates with Status SCHEDULED are filtered out in step 3 (only READY kept).
 
-    fs.create_dir(os.path.expanduser("~"))
+    if not os.path.exists(os.path.expanduser("~")):
+        fs.create_dir(os.path.expanduser("~"))
     now = datetime.now(timezone.utc)
     future = (now + timedelta(hours=10)).isoformat()
 

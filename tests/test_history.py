@@ -27,7 +27,8 @@ def mock_history_file(fs):
 def test_record_event_creates_file_if_missing(fs):
     """Test that record_event creates the history file if it doesn't exist."""
     # Setup
-    fs.create_dir(os.path.expanduser("~"))
+    if not os.path.exists(os.path.expanduser("~")):
+        fs.create_dir(os.path.expanduser("~"))
 
     # Action
     with patch("gemini_manager.history.HISTORY_FILE", os.path.expanduser("~/test_history.json")):
