@@ -7,8 +7,8 @@ import json
 from gemini_manager import backup
 from gemini_manager.config import DEFAULT_GEMINI_HOME, GEMINI_CLI_HOME
 
-# In tests, usually home is /root
-SRC_DIR = "/root/.gemini-manager"
+# In tests, os.path.expanduser('~') resolves to actual user home
+SRC_DIR = os.path.expanduser("~/.gemini-manager")
 
 # Note: We rely on pyfakefs (fs fixture) which is autouse in conftest.py
 # So standard os operations work on the fake filesystem.
