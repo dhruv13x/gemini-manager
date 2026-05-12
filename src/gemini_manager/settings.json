@@ -1,0 +1,57 @@
+{
+  "security": {
+    "auth": {
+      "selectedType": "oauth-personal"
+    }
+  },
+  "general": {
+    "previewFeatures": true,
+    "disableAutoUpdate": true,
+    "enablePromptCompletion": true,
+    "maxSessionTurns": -1,
+    "chat_history_backup_path": "~/.gemini-manager/chat_backups"
+  },
+  "ui": {
+    "showStatusInTitle": true,
+    "footer": {
+      "hideSandboxStatus": false
+    },
+    "showMemoryUsage": true,
+    "showModelInfoInChat": true,
+    "showCitations": true,
+    "showLineNumbers": true,
+    "useFullWidth": true,
+    "hideBanner": true,
+    "hideTips": true,
+    "hideContextSummary": false,
+    "useAlternateBuffer": false
+  },
+  "tools": {
+    "enableRecursiveFileSearch": true,
+    "useRipgrep": true,
+    "enableInteractiveShell": true,
+    "showColor": true,
+    "enableMessageBusIntegration": true,
+    "truncateToolOutputLines": 10000,
+    "truncateOutputThreshold": 4000000
+  },
+  "behavior": {
+    "skipNextSpeakerCheck": true,
+    "respectGitignore": true,
+    "respectGeminiignore": true,
+    "disableYOLOMode": true
+  },
+  "model": {
+    "compressionThreshold": 0.97,
+    "enableModelRouter": true
+  },
+  "ide": {
+    "enabled": true
+  },
+  "experimental": {
+    "codebaseInvestigatorSettings": {
+      "enabled": true,
+      "maxNumTurns": 100
+    }
+  }
+}
