@@ -9,14 +9,14 @@ def mock_gemini_home(fs):
     Using pyfakefs `fs` fixture.
     """
     # Create the fake home directory
-    fake_home = "/home/user"
+    fake_home = "/home/runner"
     os.makedirs(fake_home, exist_ok=True)
 
     # Define paths
     gemini_cli_home = os.path.join(fake_home, ".gemini-manager")
     default_backup_dir = os.path.join(gemini_cli_home, "backups")
     chat_history_backup_path = os.path.join(gemini_cli_home, "chat_backups")
-    old_configs_dir = os.path.join(gemini_cli_home, "old_configs")
+    old_configs_dir = os.path.join(fake_home, ".gemini-manager-old")
     default_gemini_home = os.path.join(fake_home, ".gemini")
 
     # Create directories in fake fs
