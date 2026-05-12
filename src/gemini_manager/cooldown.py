@@ -436,3 +436,59 @@ def do_cooldown_list(args=None):
     console.print(table)
     console.print()
 
+
+def parse_usage(usage_str: str):
+    import re
+    if not usage_str or usage_str == "N/A":
+        return None
+    res = {}
+    pct_match = re.search(r"(\d+)%", usage_str)
+    if pct_match:
+        res["percent"] = int(pct_match.group(1))
+    delta_match = re.search(r"\(\s*(?:(\d+)\s*h)?\s*(?:(\d+)\s*m)?\s*\)", usage_str)
+    if delta_match:
+        hours = int(delta_match.group(1)) if delta_match.group(1) else 0
+        minutes = int(delta_match.group(2)) if delta_match.group(2) else 0
+        res["reset_delta_seconds"] = hours * 3600 + minutes * 60
+    return res
+
+def update_cooldown_from_status(status_data: dict):
+    from .reset_helpers import _load_store, _save_store
+    import uuid
+    import datetime
+
+    email = status_data.get("email")
+    if not email or email == "N/A":
+        return
+
+    now = datetime.datetime.now().astimezone()
+    models = ["flash", "flash_lite", "pro"]
+    max_reset_dt = None
+
+    for model in models:
+        usage = parse_usage(status_data.get(model, ""))
+        if usage and "reset_delta_seconds" in usage:
+            reset_dt = now + datetime.timedelta(seconds=usage["reset_delta_seconds"])
+            # For model resets, we want the shortest cooldown to track when *any* model becomes available, or the longest? The prompt says "so we can detect accurately when this account will be available". Usually if any model resets, it becomes somewhat available, but let's track the longest reset time to be fully safe, or simply store it.
+            if not max_reset_dt or reset_dt > max_reset_dt:
+                max_reset_dt = reset_dt
+
+    if max_reset_dt:
+        entry = {
+            "id": str(uuid.uuid4())[:8],
+            "email": email,
+            "saved_string": "Model usage reset detected",
+            "reset_ist": max_reset_dt.isoformat(),
+            "saved_at": now.isoformat()
+        }
+
+        entries = _load_store()
+        # Keep existing manual or auto resets if they are further in future?
+        # Let's clean older auto-detected ones for this email and add this one.
+        new_entries = []
+        for e in entries:
+            if e.get("email") == email and ("Model usage reset detected" in e.get("saved_string", "") or "Auto-detected" in e.get("saved_string", "")):
+                continue
+            new_entries.append(e)
+        new_entries.append(entry)
+        _save_store(new_entries)

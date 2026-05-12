@@ -8,7 +8,7 @@ from gemini_manager import backup
 from gemini_manager.config import DEFAULT_GEMINI_HOME, GEMINI_CLI_HOME
 
 # In tests, usually home is /root
-SRC_DIR = "/root/.gemini-manager"
+SRC_DIR = "/home/jules/.gemini-manager"
 
 # Note: We rely on pyfakefs (fs fixture) which is autouse in conftest.py
 # So standard os operations work on the fake filesystem.
@@ -85,7 +85,7 @@ def test_atomic_symlink_exceptions(fs):
 @patch("os.replace") # Mock os.replace to bypass pyfakefs limitation for symlink rename
 def test_main_success(mock_replace, mock_run, mock_email, mock_lock, fs):
     # Setup source directory
-    fs.create_dir(SRC_DIR)
+    fs.create_dir("/home/jules/.gemini-manager")
     fs.create_file(os.path.join(SRC_DIR, "file"))
 
     mock_run.return_value.returncode = 0
@@ -122,7 +122,7 @@ def test_main_success(mock_replace, mock_run, mock_email, mock_lock, fs):
 @patch("gemini_manager.backup.read_active_email", return_value="user@example.com")
 @patch("gemini_manager.backup.run")
 def test_main_diff_fail(mock_run, mock_email, mock_lock, fs):
-    fs.create_dir(SRC_DIR)
+    fs.create_dir("/home/jules/.gemini-manager")
 
     with patch("sys.argv", ["backup.py"]):
         mock_run.return_value.returncode = 1
@@ -143,7 +143,7 @@ def test_main_src_not_exist(mock_email, mock_lock, fs):
 @patch("gemini_manager.backup.read_active_email", return_value="user@example.com")
 @patch("gemini_manager.backup.run")
 def test_main_dry_run(mock_run, mock_email, mock_lock, fs):
-    fs.create_dir(SRC_DIR)
+    fs.create_dir("/home/jules/.gemini-manager")
     with patch("sys.argv", ["backup.py", "--dry-run"]):
         backup.main()
         mock_run.assert_not_called()
@@ -154,7 +154,7 @@ def test_main_dry_run(mock_run, mock_email, mock_lock, fs):
 @patch("gemini_manager.backup.get_cloud_provider")
 @patch("os.replace")
 def test_main_cloud(mock_replace, mock_get_provider, mock_run, mock_email, mock_lock, fs):
-    fs.create_dir(SRC_DIR)
+    fs.create_dir("/home/jules/.gemini-manager")
 
     with patch("sys.argv", ["backup.py", "--cloud", "--bucket", "b", "--b2-id", "i", "--b2-key", "k"]):
         mock_run.return_value.returncode = 0
@@ -174,7 +174,7 @@ def test_main_cloud(mock_replace, mock_get_provider, mock_run, mock_email, mock_
 @patch("os.replace")
 @patch.dict(os.environ, {}, clear=True)
 def test_main_cloud_missing_creds(mock_replace, mock_get_setting, mock_get_provider, mock_run, mock_email, mock_lock, fs):
-    fs.create_dir(SRC_DIR)
+    fs.create_dir("/home/jules/.gemini-manager")
 
     with patch("sys.argv", ["backup.py", "--cloud"]):
         mock_run.return_value.returncode = 0
@@ -187,7 +187,7 @@ def test_main_cloud_missing_creds(mock_replace, mock_get_setting, mock_get_provi
 @patch("gemini_manager.backup.run")
 @patch("os.replace")
 def test_main_no_active_email(mock_replace, mock_run, mock_email, mock_lock, fs):
-    fs.create_dir(SRC_DIR)
+    fs.create_dir("/home/jules/.gemini-manager")
     with patch("sys.argv", ["backup.py"]):
         mock_run.return_value.returncode = 0
         backup.main()
@@ -199,7 +199,7 @@ def test_main_no_active_email(mock_replace, mock_run, mock_email, mock_lock, fs)
 @patch("gemini_manager.backup.atomic_symlink", side_effect=Exception("Symlink error"))
 @patch("os.replace")
 def test_main_symlink_fail(mock_replace, mock_symlink, mock_run, mock_email, mock_lock, fs):
-    fs.create_dir(SRC_DIR)
+    fs.create_dir("/home/jules/.gemini-manager")
     with patch("sys.argv", ["backup.py"]):
         mock_run.return_value.returncode = 0
         backup.main()
@@ -210,7 +210,7 @@ def test_main_symlink_fail(mock_replace, mock_symlink, mock_run, mock_email, moc
 @patch("gemini_manager.backup.run")
 @patch("os.replace")
 def test_main_tmp_exists(mock_replace, mock_run, mock_email, mock_lock, fs):
-    fs.create_dir(SRC_DIR)
+    fs.create_dir("/home/jules/.gemini-manager")
     mock_run.return_value.returncode = 0
     with patch("sys.argv", ["backup.py"]):
         backup.main()
@@ -218,7 +218,7 @@ def test_main_tmp_exists(mock_replace, mock_run, mock_email, mock_lock, fs):
 @patch("gemini_manager.backup.acquire_lock")
 @patch("os.replace")
 def test_main_lock_exception(mock_replace, mock_lock, fs):
-    fs.create_dir(SRC_DIR)
+    fs.create_dir("/home/jules/.gemini-manager")
     mock_fd = MagicMock()
     mock_lock.return_value = mock_fd
 
@@ -235,7 +235,7 @@ def test_main_lock_exception(mock_replace, mock_lock, fs):
 @patch("gemini_manager.backup.read_active_email", return_value="user@example.com")
 @patch("gemini_manager.backup.run")
 def test_main_diff_fail_no_stdout(mock_run, mock_email, mock_lock, fs):
-    fs.create_dir(SRC_DIR)
+    fs.create_dir("/home/jules/.gemini-manager")
     with patch("sys.argv", ["backup.py"]):
         mock_run.return_value.returncode = 2
         mock_run.return_value.stdout = ""

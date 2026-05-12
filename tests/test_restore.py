@@ -478,6 +478,8 @@ def test_restore_auto_local_success(fs, capsys):
     with patch("gemini_manager.restore.get_recommendation", return_value=rec):
         with patch("gemini_manager.restore.acquire_lock"), \
              patch("gemini_manager.restore.extract_archive"), \
+                 patch("gemini_manager.status.get_gemini_status", return_value={"email": "new@test.com", "flash": "N/A", "flash_lite": "N/A", "pro": "N/A"}), \
+                 patch("gemini_manager.cooldown.update_cooldown_from_status"), \
              patch("gemini_manager.restore.run") as mock_run, \
              patch("os.replace"), \
              patch("gemini_manager.restore.get_active_session", return_value=None):
@@ -539,6 +541,8 @@ def test_restore_cloud_auto_success(fs, capsys):
             with patch("gemini_manager.restore.get_recommendation", return_value=rec):
                  with patch("gemini_manager.restore.acquire_lock"), \
                      patch("gemini_manager.restore.extract_archive"), \
+                 patch("gemini_manager.status.get_gemini_status", return_value={"email": "new@test.com", "flash": "N/A", "flash_lite": "N/A", "pro": "N/A"}), \
+                 patch("gemini_manager.cooldown.update_cooldown_from_status"), \
                      patch("gemini_manager.restore.run") as mock_run, \
                      patch("os.replace"), \
                      patch("gemini_manager.restore.get_active_session", return_value=None), \
@@ -593,6 +597,8 @@ def test_restore_from_archive_search_fallback(fs, capsys):
 
     with patch("gemini_manager.restore.acquire_lock"), \
          patch("gemini_manager.restore.extract_archive"), \
+                 patch("gemini_manager.status.get_gemini_status", return_value={"email": "new@test.com", "flash": "N/A", "flash_lite": "N/A", "pro": "N/A"}), \
+                 patch("gemini_manager.cooldown.update_cooldown_from_status"), \
          patch("gemini_manager.restore.run") as mock_run, \
          patch("os.replace"), \
          patch("gemini_manager.restore.get_active_session", return_value=None):
@@ -643,6 +649,8 @@ def test_restore_cloud_specific_success_cli(fs, capsys):
 
             with patch("gemini_manager.restore.acquire_lock"), \
                  patch("gemini_manager.restore.extract_archive"), \
+                 patch("gemini_manager.status.get_gemini_status", return_value={"email": "new@test.com", "flash": "N/A", "flash_lite": "N/A", "pro": "N/A"}), \
+                 patch("gemini_manager.cooldown.update_cooldown_from_status"), \
                  patch("gemini_manager.restore.run") as mock_run, \
                  patch("os.replace"), \
                  patch("gemini_manager.restore.get_active_session", return_value=None), \
@@ -698,10 +706,12 @@ def test_restore_auto_cooldown_outgoing(fs, capsys):
          # Patch resolve_credentials to prevent exit if called (it shouldn't be for local)
          with patch("gemini_manager.restore.acquire_lock"), \
              patch("gemini_manager.restore.extract_archive"), \
+                 patch("gemini_manager.status.get_gemini_status", return_value={"email": "new@test.com", "flash": "N/A", "flash_lite": "N/A", "pro": "N/A"}), \
+                 patch("gemini_manager.cooldown.update_cooldown_from_status"), \
              patch("gemini_manager.restore.run") as mock_run, \
              patch("gemini_manager.restore.add_24h_cooldown_for_email") as mock_cooldown, \
              patch("gemini_manager.restore.record_switch") as mock_switch, \
-             patch("os.replace"):
+                 patch("os.replace"):
 
              mock_run.return_value.returncode = 0
              perform_restore(args)

@@ -491,6 +491,11 @@ def perform_restore(args: argparse.Namespace):
                     print("Recording switch for 24h cooldown period...")
                     # Pass args to handle potential cloud upload
                     record_switch(email_after, args=args)
+                    from .status import get_gemini_status
+                    from .cooldown import update_cooldown_from_status
+                    status_data = get_gemini_status()
+                    if not 'error' in status_data:
+                        update_cooldown_from_status(status_data)
 
         finally:
             # cleanup temp extraction dir if still present

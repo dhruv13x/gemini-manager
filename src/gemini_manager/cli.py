@@ -16,6 +16,10 @@ from .prune import do_prune
 from .update import do_update, do_check_update
 from .recommend import do_recommend
 from .stats import do_stats
+from .status import get_gemini_status
+from .cooldown import parse_usage, update_cooldown_from_status
+from .reset_helpers import sync_resets_with_cloud
+from .cloud_factory import get_cloud_provider
 from .reset_helpers import handle_resets_command
 from .profile import do_profile
 from .config import (
@@ -83,6 +87,31 @@ def main():
         do_recommend(args)
     elif args.command == "stats" or args.command == "usage":
         do_stats(args)
+    elif args.command == "status":
+        from .status import get_gemini_status
+        from .cooldown import update_cooldown_from_status, do_cooldown_list
+        from .reset_helpers import sync_resets_with_cloud
+        from .cloud_factory import get_cloud_provider
+        from .ui import cprint, NEON_CYAN, NEON_YELLOW
+        import json
+
+        cprint(NEON_CYAN, "Fetching Gemini status...")
+        status_data = get_gemini_status()
+        if "error" in status_data:
+            cprint(NEON_YELLOW, f"Error: {status_data['error']}")
+        else:
+            print("Email :", status_data['email'])
+            print("Flash :", status_data['flash'])
+            print("Flash Lite :", status_data['flash_lite'])
+            print("Pro :", status_data['pro'])
+            update_cooldown_from_status(status_data)
+
+            if args.cloud:
+                cprint(NEON_CYAN, "Syncing to cloud...")
+                provider = get_cloud_provider(args)
+                if provider:
+                    sync_resets_with_cloud(provider)
+            do_cooldown_list(args)
     elif args.command == "resets":
         if not handle_resets_command(args):
             # We need to print help for the resets command.

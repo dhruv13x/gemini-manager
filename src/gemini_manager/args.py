@@ -217,6 +217,8 @@ def get_parser() -> argparse.ArgumentParser:
 
     # Stats command
     stats_parser = subparsers.add_parser("stats", aliases=["usage"], help="Show usage statistics (last 7 days).")
+    status_parser = subparsers.add_parser("status", help="Check current account model cooldown statistics via tmux session.")
+    status_parser.add_argument("--cloud", action="store_true", help="Sync cooldown status from the cloud.")
 
     # Profile command
     profile_parser = subparsers.add_parser("profile", help="Manage configuration profiles.")
