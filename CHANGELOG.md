@@ -1,5 +1,7 @@
 # Changelog
 
+## [22.0.0] - 2026-05-13
+
 ## [21.0.0] - 2026-05-13
 ### Other Changes
 - update
