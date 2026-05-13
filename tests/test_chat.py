@@ -3,7 +3,7 @@ import pytest
 import os
 import shutil
 from pathlib import Path
-from unittest.mock import patch, Mock
+from unittest.mock import patch, Mock, MagicMock
 from gemini_manager.chat import (
     backup_chat_history,
     restore_chat_history,
@@ -149,3 +149,100 @@ def test_resume_chat_exception(capsys):
 
     captured = capsys.readouterr()
     assert "Failed to resume chat: Unexpected error" in captured.out
+
+def test_backup_chat_history_no_items(fs, capsys):
+    gemini_home = "/home/user/.gm"
+    tmp_dir = os.path.join(gemini_home, "tmp")
+    fs.create_dir(tmp_dir)
+    backup_path = "/backup"
+
+    backup_chat_history(backup_path, gemini_home)
+    captured = capsys.readouterr()
+    assert "No chat history found to backup." in captured.out
+
+def test_backup_chat_history_hash_dirs(fs):
+    gemini_home = "/home/user/.gm"
+    tmp_dir = os.path.join(gemini_home, "tmp")
+    fs.create_dir(tmp_dir)
+    
+    # Create a 64-char hex directory (should be skipped)
+    hash_dir = "a" * 64
+    fs.create_dir(os.path.join(tmp_dir, hash_dir))
+    fs.create_file(os.path.join(tmp_dir, hash_dir, "data.txt"))
+    
+    # Create a normal directory
+    fs.create_dir(os.path.join(tmp_dir, "normal_project"))
+    fs.create_file(os.path.join(tmp_dir, "normal_project", "data.txt"))
+
+    backup_path = "/backup"
+    backup_chat_history(backup_path, gemini_home)
+    
+    backup_tmp = os.path.join(backup_path, "tmp")
+    assert os.path.exists(os.path.join(backup_tmp, "normal_project"))
+    assert not os.path.exists(os.path.join(backup_tmp, hash_dir))
+
+def test_backup_chat_history_multiple_sessions(fs):
+    gemini_home = "/home/user/.gm"
+    tmp_dir = os.path.join(gemini_home, "tmp")
+    project_chats = os.path.join(tmp_dir, "project1", "chats")
+    fs.create_dir(project_chats)
+    
+    # Create multiple sessions
+    fs.create_file(os.path.join(project_chats, "session-2023-01-01.json"))
+    fs.create_file(os.path.join(project_chats, "session-2023-01-02.json")) # Latest
+
+    backup_path = "/backup"
+    backup_chat_history(backup_path, gemini_home)
+    
+    backup_project_chats = os.path.join(backup_path, "tmp", "project1", "chats")
+    sessions = os.listdir(backup_project_chats)
+    assert len(sessions) == 1
+    assert "session-2023-01-02.json" in sessions
+
+def test_restore_chat_history_no_items(fs, capsys):
+    gemini_home = "/home/user/.gm"
+    backup_path = "/backup"
+    fs.create_dir(os.path.join(backup_path, "tmp"))
+
+    restore_chat_history(backup_path, gemini_home)
+    captured = capsys.readouterr()
+    assert "No chat backup found to restore." in captured.out
+
+def test_restore_chat_history_multiple_sessions_safety(fs):
+    gemini_home = "/home/user/.gm"
+    backup_path = "/backup"
+    backup_project_chats = os.path.join(backup_path, "tmp", "project1", "chats")
+    fs.create_dir(backup_project_chats)
+    
+    # Create multiple sessions in backup (shouldn't happen but testing safety)
+    fs.create_file(os.path.join(backup_project_chats, "session-2023-01-01.json"))
+    fs.create_file(os.path.join(backup_project_chats, "session-2023-01-02.json"))
+
+    restore_chat_history(backup_path, gemini_home)
+    
+    restore_project_chats = os.path.join(gemini_home, "tmp", "project1", "chats")
+    sessions = os.listdir(restore_project_chats)
+    assert len(sessions) == 1
+    assert "session-2023-01-02.json" in sessions
+
+def test_cleanup_chat_history_dry_run(fs, capsys):
+    gemini_home = "/home/user/.gm"
+    tmp_dir = os.path.join(gemini_home, "tmp")
+    fs.create_dir(tmp_dir)
+    fs.create_file(os.path.join(tmp_dir, "chat1.txt"))
+
+    cleanup_chat_history(dry_run=True, force=False, gemini_home_dir=gemini_home)
+    
+    assert os.path.exists(os.path.join(tmp_dir, "chat1.txt"))
+    captured = capsys.readouterr()
+    assert "[DRY-RUN] Would delete: chat1.txt" in captured.out
+
+def test_cleanup_chat_history_no_items_to_remove(fs, capsys):
+    gemini_home = "/home/user/.gm"
+    tmp_dir = os.path.join(gemini_home, "tmp")
+    fs.create_dir(tmp_dir)
+    fs.create_dir(os.path.join(tmp_dir, "bin"))
+
+    cleanup_chat_history(dry_run=False, force=True, gemini_home_dir=gemini_home)
+    captured = capsys.readouterr()
+    assert "Directory is already clean" in captured.out

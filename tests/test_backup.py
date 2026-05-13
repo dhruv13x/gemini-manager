@@ -133,7 +133,11 @@ def test_main_diff_fail(mock_run, mock_email, mock_lock, fs):
 @patch("gemini_manager.backup.acquire_lock")
 @patch("gemini_manager.backup.read_active_email", return_value="user@example.com")
 def test_main_src_not_exist(mock_email, mock_lock, fs):
-    # SRC_DIR not created
+    # Ensure source does NOT exist by removing it if it was created by fixture
+    from gemini_manager.config import DEFAULT_GEMINI_HOME
+    if os.path.exists(DEFAULT_GEMINI_HOME):
+        fs.remove_object(DEFAULT_GEMINI_HOME)
+
     with patch("sys.argv", ["backup.py"]):
         with pytest.raises(SystemExit) as e:
             backup.main()
