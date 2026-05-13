@@ -76,7 +76,7 @@ def test_patch_status_metadata_uploads_cloud(fs):
 
 def test_cooldown_reads_metadata_only_accounts(fs, capsys):
     backup_dir = os.path.expanduser("~/.gemini-manager/backups")
-    fs.create_dir(backup_dir)
+    # Redundant fs.create_dir removed
     path = os.path.join(backup_dir, "2026-01-01_120000-user@example.com.gemini-manager.metadata.json")
     fs.create_file(
         path,

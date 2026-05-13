@@ -72,9 +72,9 @@ def test_do_prune_local(mock_cprint, fs):
     archive_dir = "/tmp/backups"
     dir_backup_path = OLD_CONFIGS_DIR
 
-    fs.create_dir(archive_dir)
-    fs.create_dir(dir_backup_path)
-
+    os.makedirs(archive_dir, exist_ok=True)
+    # dir_backup_path (OLD_CONFIGS_DIR) is already created by fixture
+    
     # Create archive files
     fs.create_file(os.path.join(archive_dir, "2023-01-01_100000-u.gemini-manager.tar.gz"))
     fs.create_file(os.path.join(archive_dir, "2023-01-02_100000-u.gemini-manager.tar.gz"))

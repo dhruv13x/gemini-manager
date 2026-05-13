@@ -29,7 +29,7 @@ def test_restore_auto_success(mock_mkdtemp, mock_rmtree, mock_move, mock_replace
     # sd = os.path.abspath(os.path.expanduser(args.search_dir))
 
     search_dir = os.path.expanduser("~/.gemini-manager/backups")
-    fs.create_dir(search_dir)
+    # Redundant fs.create_dir removed as it's handled by conftest.py
     fs.create_file(os.path.join(search_dir, "2025-10-20_000000-other@example.com.gemini-manager.tar.gz"))
     fs.create_file(os.path.join(search_dir, "2025-10-21_100000-auto@example.com.gemini-manager.tar.gz")) # Old
     fs.create_file(os.path.join(search_dir, "2025-10-22_100000-auto@example.com.gemini-manager.tar.gz")) # Latest
@@ -73,7 +73,7 @@ def test_restore_auto_no_backups_for_email(mock_rec, mock_lock, fs):
     mock_rec.return_value = mock_rec_obj
 
     search_dir = os.path.expanduser("~/.gemini-manager/backups")
-    fs.create_dir(search_dir)
+    # Redundant fs.create_dir removed as it's handled by conftest.py
     fs.create_file(os.path.join(search_dir, "2025-10-20_000000-other@example.com.gemini-manager.tar.gz"))
 
     with patch("sys.argv", ["restore.py", "--auto"]):
@@ -86,7 +86,7 @@ def test_restore_auto_no_backups_for_email(mock_rec, mock_lock, fs):
 def test_find_latest_archive_backup_for_email_robustness(mock_rec, mock_lock, fs):
     # Test strict email matching
     search_dir = os.path.expanduser("~/.gemini-manager/backups")
-    fs.create_dir(search_dir)
+    # Redundant fs.create_dir removed
     fs.create_file(os.path.join(search_dir, "2025-10-20_000000-sue@example.com.gemini-manager.tar.gz"))
     fs.create_file(os.path.join(search_dir, "2025-10-20_000000-josue@example.com.gemini-manager.tar.gz"))
 

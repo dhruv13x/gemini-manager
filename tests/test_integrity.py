@@ -114,8 +114,8 @@ def test_main_diff_fail_stderr(mock_print, mock_run, fs):
 @patch("builtins.print")
 def test_main_diff_fail_no_stderr(mock_print, mock_run, fs):
     src_path = "/root/.gemini-manager"
-    fs.create_dir(src_path)
-    fs.create_dir(OLD_CONFIGS_DIR)
+    os.makedirs(src_path, exist_ok=True)
+    # OLD_CONFIGS_DIR is already created by fixture
     fs.create_dir(os.path.join(OLD_CONFIGS_DIR, "2025-10-23_042211-test.gemini-manager"))
 
     with patch("sys.argv", ["integrity.py", "--src", src_path]):

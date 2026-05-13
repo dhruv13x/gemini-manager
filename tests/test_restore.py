@@ -517,7 +517,7 @@ def test_restore_auto_local_not_found(fs, capsys):
             perform_restore(args)
 
 def test_restore_cloud_auto_success(fs, capsys):
-    fs.create_dir(os.path.expanduser("~/.gemini-manager"))
+    # ~./gemini-manager is already created by fixture
 
     args = argparse.Namespace(
         auto=True,
