@@ -239,7 +239,7 @@ def test_do_recommend_never_used(fs, capsys):
 
 def test_get_recommendation_from_metadata(fs):
     backup_dir = os.path.expanduser("~/.gemini-manager/backups")
-    fs.create_dir(backup_dir)
+    os.makedirs(backup_dir, exist_ok=True)
     fs.create_file(
         os.path.join(backup_dir, "2026-01-01_120000-meta@test.com.gemini-manager.metadata.json"),
         contents=json.dumps({
@@ -261,7 +261,7 @@ def test_get_recommendation_from_metadata(fs):
 
 def test_get_recommendation_prioritizes_lowest_flash_quota(fs):
     backup_dir = os.path.expanduser("~/.gemini-manager/backups")
-    fs.create_dir(backup_dir)
+    os.makedirs(backup_dir, exist_ok=True)
     for email, flash_percent in [
         ("zero@test.com", 0),
         ("mid@test.com", 34),
@@ -288,7 +288,7 @@ def test_get_recommendation_prioritizes_lowest_flash_quota(fs):
 
 def test_get_recommendation_prioritizes_34_over_64_flash_when_no_zero(fs):
     backup_dir = os.path.expanduser("~/.gemini-manager/backups")
-    fs.create_dir(backup_dir)
+    os.makedirs(backup_dir, exist_ok=True)
     for email, flash_percent in [
         ("mid@test.com", 34),
         ("high@test.com", 64),
@@ -311,7 +311,7 @@ def test_get_recommendation_prioritizes_34_over_64_flash_when_no_zero(fs):
 
 def test_do_recommend_use_calls_restore(fs):
     backup_dir = os.path.expanduser("~/.gemini-manager/backups")
-    fs.create_dir(backup_dir)
+    os.makedirs(backup_dir, exist_ok=True)
     fs.create_file(
         os.path.join(backup_dir, "2026-01-01_120000-meta@test.com.gemini-manager.metadata.json"),
         contents=json.dumps({

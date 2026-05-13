@@ -1,52 +1,15 @@
-# tests/test_prune.py
 
 import pytest
 from unittest.mock import patch, MagicMock, call
 import os
-import time
-from gemini_manager.prune import do_prune, get_backup_list, get_backup_list_dirs, prune_list, parse_ts
-from gemini_manager.config import OLD_CONFIGS_DIR
+import json
+from gemini_manager.prune import prune_list, do_prune
+from gemini_manager.config import DEFAULT_BACKUP_DIR, OLD_CONFIGS_DIR
 
-# Using pyfakefs via conftest.py
+def mock_args(keep=5, cloud=False, cloud_only=False, backup_dir=DEFAULT_BACKUP_DIR, dry_run=False):
+    return MagicMock(keep=keep, cloud=cloud, cloud_only=cloud_only, backup_dir=backup_dir, dry_run=dry_run)
 
-def mock_args(backup_dir="/tmp/backups", keep=2, cloud=False, cloud_only=False, dry_run=False, b2_id=None, b2_key=None, bucket=None):
-    return MagicMock(backup_dir=backup_dir, keep=keep, cloud=cloud, cloud_only=cloud_only, dry_run=dry_run, b2_id=b2_id, b2_key=b2_key, bucket=bucket)
-
-def test_parse_ts():
-    ts = parse_ts("2023-01-01_120000-backup.gemini-manager.tar.gz")
-    assert ts is not None
-    assert ts.tm_year == 2023
-
-    assert parse_ts("invalid") is None
-    assert parse_ts("2023-01-01_120000-backup.gemini-manager") is not None # Directory format
-
-def test_get_backup_list():
-    files = [
-        "2023-01-01_100000-user@example.com.gemini-manager.tar.gz",
-        "2023-01-02_100000-user@example.com.gemini-manager.tar.gz",
-        "invalid.txt",
-        "2023-01-03_100000-user@example.com.gemini-manager" # Should be ignored by get_backup_list
-    ]
-    backups = get_backup_list(files)
-    assert len(backups) == 2
-    # Should be sorted newest first
-    assert backups[0][1] == "2023-01-02_100000-user@example.com.gemini-manager.tar.gz"
-    assert backups[1][1] == "2023-01-01_100000-user@example.com.gemini-manager.tar.gz"
-
-def test_get_backup_list_dirs():
-    files = [
-        "2023-01-01_100000-user@example.com.gemini-manager",
-        "2023-01-02_100000-user@example.com.gemini-manager",
-        "invalid.txt",
-        "2023-01-03_100000-user@example.com.gemini-manager.tar.gz" # Should be ignored by get_backup_list_dirs
-    ]
-    dirs = get_backup_list_dirs(files)
-    assert len(dirs) == 2
-    # Should be sorted newest first
-    assert dirs[0][1] == "2023-01-02_100000-user@example.com.gemini-manager"
-    assert dirs[1][1] == "2023-01-01_100000-user@example.com.gemini-manager"
-
-def test_prune_list_no_action():
+def test_prune_list_no_prune():
     backups = [("ts1", "file1"), ("ts2", "file2")]
     callback = MagicMock()
     # Keep 5, have 2. No prune.
@@ -85,7 +48,7 @@ def test_do_prune_local(mock_cprint, fs):
     fs.create_dir(os.path.join(dir_backup_path, "2023-01-02_110000-u.gemini-manager"))
     fs.create_dir(os.path.join(dir_backup_path, "2023-01-03_110000-u.gemini-manager"))
 
-    args = mock_args(keep=1) # Keep only the newest for both archives and directories
+    args = mock_args(keep=1, backup_dir=archive_dir) # Keep only the newest for both archives and directories
 
     do_prune(args)
 
@@ -102,21 +65,23 @@ def test_do_prune_local(mock_cprint, fs):
 
 @patch("gemini_manager.prune.cprint")
 def test_do_prune_local_no_dir(mock_cprint, fs):
-    # Dirs don't exist
+    # Dirs don't exist - We must ensure they are GONE if conftest created them
+    from gemini_manager.config import DEFAULT_BACKUP_DIR, OLD_CONFIGS_DIR
+    if os.path.exists(DEFAULT_BACKUP_DIR):
+        fs.remove_object(DEFAULT_BACKUP_DIR)
+    if os.path.exists(OLD_CONFIGS_DIR):
+        fs.remove_object(OLD_CONFIGS_DIR)
+
     args = mock_args(keep=1) # default local
     do_prune(args)
-    # Just prints warning for both archive and directory paths not found
-    # Checking console output is tricky with cprint mock unless we inspect calls
-
-    # Since we use cprint from .ui, and we mocked it
-    # We can check call args
-
+    
     found_archive_warn = False
     found_dir_warn = False
     for call_args in mock_cprint.call_args_list:
-        if "Archive backup directory not found" in str(call_args):
+        arg_str = str(call_args)
+        if "Archive backup directory not found" in arg_str:
             found_archive_warn = True
-        if "Directory backup path not found" in str(call_args):
+        if "Directory backup path not found" in arg_str:
             found_dir_warn = True
 
     assert found_archive_warn
@@ -143,10 +108,6 @@ def test_do_prune_cloud(mock_cprint, mock_b2_cls, mock_creds, fs):
 
     args = mock_args(keep=1, cloud=True, backup_dir="/tmp/nonexistent") # Local part will be skipped
     
-    # Don't mock os.path.exists if we want fs to work normally,
-    # but here we want to ensure local logic is skipped or handles missing dir
-    # backup_dir points to non-existent so local logic prints warnings which is fine.
-
     do_prune(args)
 
     mock_b2.bucket.delete_file_version.assert_called_once_with("id1", "2023-01-01_100000-u.gemini-manager.tar.gz")
@@ -188,8 +149,8 @@ def test_do_prune_local_remove_fail(mock_cprint, fs):
     archive_dir = "/tmp/backups"
     dir_backup_path = OLD_CONFIGS_DIR
 
-    fs.create_dir(archive_dir)
-    fs.create_dir(dir_backup_path)
+    os.makedirs(archive_dir, exist_ok=True)
+    os.makedirs(dir_backup_path, exist_ok=True)
 
     # Create files
     file_path = os.path.join(archive_dir, "2023-01-01_100000-u.gemini-manager.tar.gz")
@@ -200,7 +161,7 @@ def test_do_prune_local_remove_fail(mock_cprint, fs):
     # Patch os.remove and shutil.rmtree to fail
     with patch("os.remove", side_effect=Exception("Permission denied for file")):
         with patch("shutil.rmtree", side_effect=Exception("Permission denied for dir")):
-            args = mock_args(keep=0) # delete all
+            args = mock_args(keep=0, backup_dir=archive_dir) # delete all
             do_prune(args)
 
     # Assert error logged

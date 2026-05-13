@@ -514,7 +514,7 @@ def test_add_24h_cooldown_for_email_with_first_used(mock_get_live_status, fs, ca
             "last_used": now.isoformat()
         }
     }
-    fs.create_dir(os.path.dirname(COOLDOWN_FILE))
+    os.makedirs(os.path.dirname(COOLDOWN_FILE), exist_ok=True)
     with open(COOLDOWN_FILE, "w") as f:
         json.dump(cd_data, f)
         
@@ -543,7 +543,7 @@ def test_add_24h_cooldown_for_email_with_stale_first_used(fs, capsys):
             "last_used": now.isoformat()
         }
     }
-    fs.create_dir(os.path.dirname(COOLDOWN_FILE))
+    os.makedirs(os.path.dirname(COOLDOWN_FILE), exist_ok=True)
     with open(COOLDOWN_FILE, "w") as f:
         json.dump(cd_data, f)
         

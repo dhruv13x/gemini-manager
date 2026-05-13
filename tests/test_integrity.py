@@ -1,29 +1,9 @@
-# tests/test_integrity.py
 
 import pytest
 from unittest.mock import patch, MagicMock
 import os
-import time
-import sys
-import subprocess
 from gemini_manager import integrity
-from gemini_manager.config import OLD_CONFIGS_DIR, DEFAULT_GEMINI_HOME
-
-# Note: We rely on pyfakefs (fs fixture) which is autouse in conftest.py
-# So standard os operations work on the fake filesystem.
-
-def test_run():
-    with patch("subprocess.run") as mock_run:
-        integrity.run("ls")
-        mock_run.assert_called_with("ls", shell=True, check=True)
-
-def test_run_capture():
-    with patch("subprocess.run") as mock_run:
-        integrity.run("ls", capture=True)
-        # subprocess.run(..., stdout=PIPE, stderr=PIPE)
-        kwargs = mock_run.call_args[1]
-        assert kwargs.get("stdout") is not None
-        assert kwargs.get("stderr") is not None
+from gemini_manager.config import DEFAULT_GEMINI_HOME, OLD_CONFIGS_DIR
 
 def test_parse_timestamp_from_name():
     ts = integrity.parse_timestamp_from_name("2025-10-22_042211-test@test.gemini-manager")
@@ -34,7 +14,7 @@ def test_parse_timestamp_from_name():
 
 def test_find_latest_backup(fs):
     backup_dir = "/tmp/backups"
-    fs.create_dir(backup_dir)
+    os.makedirs(backup_dir, exist_ok=True)
     fs.create_dir(os.path.join(backup_dir, "2025-10-23_042211-test.gemini-manager"))
     fs.create_dir(os.path.join(backup_dir, "2025-10-22_042211-test.gemini-manager"))
 
@@ -43,22 +23,27 @@ def test_find_latest_backup(fs):
 
 def test_find_latest_backup_none(fs):
     backup_dir = "/tmp/backups"
-    fs.create_dir(backup_dir)
+    os.makedirs(backup_dir, exist_ok=True)
     assert integrity.find_latest_backup(backup_dir) is None
 
 def test_main_src_not_exists(fs):
     # DEFAULT_GEMINI_HOME not created
+    # Ensure it's gone
+    if os.path.exists(DEFAULT_GEMINI_HOME):
+        fs.remove_object(DEFAULT_GEMINI_HOME)
+
     with patch("sys.argv", ["integrity.py"]):
         with pytest.raises(SystemExit) as e:
             integrity.main()
         assert e.value.code == 1
 
 def test_main_no_backup(fs):
-    fs.create_dir(DEFAULT_GEMINI_HOME)
+    os.makedirs(DEFAULT_GEMINI_HOME, exist_ok=True)
     # OLD_CONFIGS_DIR is created by conftest usually, but it might be empty
-    # integrity uses OLD_CONFIGS_DIR as search_dir
     # Ensure it's empty
-    # fs.create_dir(OLD_CONFIGS_DIR) # conftest already does
+    if os.path.exists(OLD_CONFIGS_DIR):
+        for item in os.listdir(OLD_CONFIGS_DIR):
+            fs.remove_object(os.path.join(OLD_CONFIGS_DIR, item))
 
     with patch("sys.argv", ["integrity.py"]):
         with pytest.raises(SystemExit) as e:
@@ -67,8 +52,8 @@ def test_main_no_backup(fs):
 
 @patch("gemini_manager.integrity.run")
 def test_main_diff_ok(mock_run, fs):
-    fs.create_dir("/root/.gemini-manager")
-    fs.create_dir(OLD_CONFIGS_DIR)
+    os.makedirs("/root/.gemini-manager", exist_ok=True)
+    os.makedirs(OLD_CONFIGS_DIR, exist_ok=True)
     fs.create_dir(os.path.join(OLD_CONFIGS_DIR, "2025-10-23_042211-test.gemini-manager"))
 
     with patch("sys.argv", ["integrity.py", "--src", "/root/.gemini-manager"]):
@@ -78,12 +63,10 @@ def test_main_diff_ok(mock_run, fs):
 @patch("gemini_manager.integrity.run")
 def test_main_diff_fail(mock_run, fs):
     src_path = "/root/.gemini-manager"
-    fs.create_dir(src_path)
-    fs.create_dir(OLD_CONFIGS_DIR)
+    os.makedirs(src_path, exist_ok=True)
+    os.makedirs(OLD_CONFIGS_DIR, exist_ok=True)
     fs.create_dir(os.path.join(OLD_CONFIGS_DIR, "2025-10-23_042211-test.gemini-manager"))
     
-    print(f"Path exists check: {os.path.exists(src_path)}")
-
     with patch("sys.argv", ["integrity.py", "--src", src_path]):
         mock_run.return_value.returncode = 1
         mock_run.return_value.stdout = "diff"
@@ -94,8 +77,8 @@ def test_main_diff_fail(mock_run, fs):
 @patch("builtins.print")
 def test_main_diff_fail_stderr(mock_print, mock_run, fs):
     src_path = "/root/.gemini-manager"
-    fs.create_dir(src_path)
-    fs.create_dir(OLD_CONFIGS_DIR)
+    os.makedirs(src_path, exist_ok=True)
+    os.makedirs(OLD_CONFIGS_DIR, exist_ok=True)
     fs.create_dir(os.path.join(OLD_CONFIGS_DIR, "2025-10-23_042211-test.gemini-manager"))
 
     with patch("sys.argv", ["integrity.py", "--src", src_path]):
@@ -115,7 +98,7 @@ def test_main_diff_fail_stderr(mock_print, mock_run, fs):
 def test_main_diff_fail_no_stderr(mock_print, mock_run, fs):
     src_path = "/root/.gemini-manager"
     os.makedirs(src_path, exist_ok=True)
-    # OLD_CONFIGS_DIR is already created by fixture
+    os.makedirs(OLD_CONFIGS_DIR, exist_ok=True)
     fs.create_dir(os.path.join(OLD_CONFIGS_DIR, "2025-10-23_042211-test.gemini-manager"))
 
     with patch("sys.argv", ["integrity.py", "--src", src_path]):

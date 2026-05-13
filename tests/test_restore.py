@@ -176,7 +176,7 @@ def test_main_post_verification_fail(mock_replace, mock_run, mock_lock, fs):
 @patch("gemini_manager.restore.run")
 def test_main_dry_run(mock_run, mock_lock, fs):
     fs.create_file("/tmp/archive.tar.gz")
-    fs.create_dir(os.path.expanduser("~/.gemini-manager"))
+    os.makedirs(os.path.expanduser("~/.gemini-manager"), exist_ok=True)
 
     with patch("sys.argv", ["restore.py", "--full", "--from-archive", "/tmp/archive.tar.gz", "--dry-run"]):
         restore.main()
@@ -207,7 +207,7 @@ def test_main_from_dir_not_found(mock_lock, fs):
 @patch("gemini_manager.restore.acquire_lock")
 @patch("os.replace")
 def test_main_from_archive_search_dir(mock_replace, mock_lock, fs):
-    fs.create_dir(os.path.expanduser("~/.gemini-manager"))
+    os.makedirs(os.path.expanduser("~/.gemini-manager"), exist_ok=True)
     search_dir = os.path.expanduser("~/.gemini-manager/backups")
     fs.create_dir(search_dir)
     fs.create_file(os.path.join(search_dir, "archive.tar.gz"))
@@ -227,7 +227,7 @@ def test_main_from_archive_not_found(mock_lock, fs):
 @patch("gemini_manager.restore.acquire_lock")
 @patch("gemini_manager.restore.find_oldest_archive_backup", return_value=None)
 def test_main_auto_no_backups(mock_find, mock_lock, fs):
-    fs.create_dir(os.path.expanduser("~/.gemini-manager"))
+    os.makedirs(os.path.expanduser("~/.gemini-manager"), exist_ok=True)
     with patch("sys.argv", ["restore.py", "--full"]):
         with pytest.raises(SystemExit):
             restore.main()
@@ -238,7 +238,7 @@ def test_main_auto_no_backups(mock_find, mock_lock, fs):
 def test_main_rollback_success(mock_replace, mock_run, mock_lock, fs):
      archive = "/tmp/archive.tar.gz"
      fs.create_file(archive)
-     fs.create_dir(os.path.expanduser("~/.gemini-manager"))
+     os.makedirs(os.path.expanduser("~/.gemini-manager"), exist_ok=True)
 
      with patch("sys.argv", ["restore.py", "--full", "--from-archive", archive]):
         mock_run.side_effect = [
@@ -256,7 +256,7 @@ def test_main_rollback_success(mock_replace, mock_run, mock_lock, fs):
 def test_main_rollback_fail(mock_run, mock_lock, fs):
      archive = "/tmp/archive.tar.gz"
      fs.create_file(archive)
-     fs.create_dir(os.path.expanduser("~/.gemini-manager"))
+     os.makedirs(os.path.expanduser("~/.gemini-manager"), exist_ok=True)
 
      with patch("sys.argv", ["restore.py", "--full", "--from-archive", archive]):
         mock_run.side_effect = [MagicMock(returncode=0), MagicMock(returncode=0), MagicMock(returncode=0), MagicMock(returncode=1)]
@@ -272,7 +272,7 @@ def test_main_rollback_fail(mock_run, mock_lock, fs):
 @patch("gemini_manager.cooldown._sync_cooldown_file")
 @patch("os.replace")
 def test_main_cloud_specific_archive(mock_replace, mock_sync, mock_run, mock_get_provider, mock_lock, fs):
-    fs.create_dir(os.path.expanduser("~/.gemini-manager"))
+    os.makedirs(os.path.expanduser("~/.gemini-manager"), exist_ok=True)
     specific_archive = "2025-11-21_231311-specific@test.gemini-manager.tar.gz"
 
     with patch("sys.argv", ["restore.py", "--full", "--cloud", "--bucket", "b", "--b2-id", "i", "--b2-key", "k", "--from-archive", specific_archive]):
@@ -298,7 +298,7 @@ def test_main_cloud_specific_archive(mock_replace, mock_sync, mock_run, mock_get
 @patch("os.replace")
 def test_main_lock_exception(mock_replace, mock_lock, fs):
     fs.create_file("/tmp/backup.tar.gz")
-    fs.create_dir(os.path.expanduser("~/.gemini-manager"))
+    os.makedirs(os.path.expanduser("~/.gemini-manager"), exist_ok=True)
 
     mock_fd = MagicMock()
     mock_lock.return_value = mock_fd
@@ -315,7 +315,7 @@ def test_main_lock_exception(mock_replace, mock_lock, fs):
 def test_main_os_replace_fail_fallback(mock_run, mock_lock, fs):
     archive = "/tmp/archive.tar.gz"
     fs.create_file(archive)
-    fs.create_dir(os.path.expanduser("~/.gemini-manager"))
+    os.makedirs(os.path.expanduser("~/.gemini-manager"), exist_ok=True)
 
     mock_run.return_value.returncode = 0
 
@@ -331,7 +331,7 @@ def test_main_os_replace_fail_fallback(mock_run, mock_lock, fs):
 def test_main_temp_extraction_rmtree_fail(mock_replace, mock_run, mock_lock, fs):
     archive = "/tmp/archive.tar.gz"
     fs.create_file(archive)
-    fs.create_dir(os.path.expanduser("~/.gemini-manager"))
+    os.makedirs(os.path.expanduser("~/.gemini-manager"), exist_ok=True)
     mock_run.return_value.returncode = 0
 
     # Mock shutil.rmtree to fail
@@ -363,7 +363,7 @@ def test_main_dest_not_exists(mock_replace, mock_run, mock_lock, fs):
 def test_main_tmp_dest_not_exists(mock_replace, mock_run, mock_lock, fs):
     archive = "/tmp/archive.tar.gz"
     fs.create_file(archive)
-    fs.create_dir(os.path.expanduser("~/.gemini-manager"))
+    os.makedirs(os.path.expanduser("~/.gemini-manager"), exist_ok=True)
     mock_run.return_value.returncode = 0
 
     with patch("sys.argv", ["restore.py", "--full", "--from-archive", archive]):
@@ -374,7 +374,7 @@ def test_main_tmp_dest_not_exists(mock_replace, mock_run, mock_lock, fs):
 def test_main_force_replace(mock_run, mock_lock, fs):
     archive = "/tmp/archive.tar.gz"
     fs.create_file(archive)
-    fs.create_dir(os.path.expanduser("~/.gemini-manager"))
+    os.makedirs(os.path.expanduser("~/.gemini-manager"), exist_ok=True)
     mock_run.return_value.returncode = 0
 
     with patch("shutil.rmtree") as mock_rmtree:
@@ -424,7 +424,7 @@ def test_main_cleanup_temp_download(mock_replace, mock_sync, mock_run, mock_lock
 def test_main_verification_fail_with_stdout(mock_run, mock_lock, fs):
     archive = "/tmp/archive.tar.gz"
     fs.create_file(archive)
-    fs.create_dir(os.path.expanduser("~/.gemini-manager"))
+    os.makedirs(os.path.expanduser("~/.gemini-manager"), exist_ok=True)
 
     mock_run.side_effect = [
         MagicMock(returncode=0),
@@ -439,7 +439,7 @@ def test_main_verification_fail_with_stdout(mock_run, mock_lock, fs):
 # For perform_restore tests that use argparse.Namespace directly, we rely on fs setup too
 
 def test_restore_auto_local_no_rec(fs, capsys):
-    fs.create_dir(os.path.expanduser("~/.gemini-manager"))
+    os.makedirs(os.path.expanduser("~/.gemini-manager"), exist_ok=True)
 
     args = argparse.Namespace(
         auto=True,
@@ -459,7 +459,7 @@ def test_restore_auto_local_no_rec(fs, capsys):
             perform_restore(args)
 
 def test_restore_auto_local_success(fs, capsys):
-    fs.create_dir(os.path.expanduser("~/.gemini-manager"))
+    os.makedirs(os.path.expanduser("~/.gemini-manager"), exist_ok=True)
     search_dir = os.path.expanduser("~/gm/backups")
     fs.create_dir(search_dir)
     fs.create_file(os.path.join(search_dir, "2025-01-01_120000-test@example.com.gemini-manager.tar.gz"))
@@ -493,7 +493,7 @@ def test_restore_auto_local_success(fs, capsys):
     # assert "Auto-switch recommendation: test@example.com" in captured.out
 
 def test_restore_auto_local_not_found(fs, capsys):
-    fs.create_dir(os.path.expanduser("~/.gemini-manager"))
+    os.makedirs(os.path.expanduser("~/.gemini-manager"), exist_ok=True)
     search_dir = os.path.expanduser("~/gm/backups")
     fs.create_dir(search_dir)
 
@@ -557,7 +557,7 @@ def test_restore_cloud_auto_success(fs, capsys):
                      perform_restore(args)
 
 def test_restore_cloud_auto_not_found(fs, capsys):
-    fs.create_dir(os.path.expanduser("~/.gemini-manager"))
+    os.makedirs(os.path.expanduser("~/.gemini-manager"), exist_ok=True)
 
     args = argparse.Namespace(
         auto=True,
@@ -587,7 +587,7 @@ def test_restore_cloud_auto_not_found(fs, capsys):
                     perform_restore(args)
 
 def test_restore_from_archive_search_fallback(fs, capsys):
-    fs.create_dir(os.path.expanduser("~/.gemini-manager"))
+    os.makedirs(os.path.expanduser("~/.gemini-manager"), exist_ok=True)
     search_dir = os.path.expanduser("~/gm/backups")
     fs.create_dir(search_dir)
     fs.create_file(os.path.join(search_dir, "mybackup.tar.gz"))
@@ -615,7 +615,7 @@ def test_restore_from_archive_search_fallback(fs, capsys):
          perform_restore(args)
 
 def test_restore_from_archive_not_found_cli(fs, capsys):
-    fs.create_dir(os.path.expanduser("~/.gemini-manager"))
+    os.makedirs(os.path.expanduser("~/.gemini-manager"), exist_ok=True)
 
     args = argparse.Namespace(
         from_archive="nonexistent.tar.gz",
@@ -634,7 +634,7 @@ def test_restore_from_archive_not_found_cli(fs, capsys):
         perform_restore(args)
 
 def test_restore_cloud_specific_success_cli(fs, capsys):
-    fs.create_dir(os.path.expanduser("~/.gemini-manager"))
+    os.makedirs(os.path.expanduser("~/.gemini-manager"), exist_ok=True)
     valid_name = "2025-01-01_120000-specific.gemini-manager.tar.gz"
     args = argparse.Namespace(
         cloud=True,
@@ -671,7 +671,7 @@ def test_restore_cloud_specific_success_cli(fs, capsys):
                  perform_restore(args)
 
 def test_restore_cloud_specific_fail_cli(fs, capsys):
-    fs.create_dir(os.path.expanduser("~/.gemini-manager"))
+    os.makedirs(os.path.expanduser("~/.gemini-manager"), exist_ok=True)
     args = argparse.Namespace(
         cloud=True,
         from_archive="missing.gemini-manager.tar.gz",
@@ -700,7 +700,7 @@ def test_restore_cloud_specific_fail_cli(fs, capsys):
                  perform_restore(args)
 
 def test_restore_auto_cooldown_outgoing(fs, capsys):
-    fs.create_dir(os.path.expanduser("~/.gemini-manager"))
+    os.makedirs(os.path.expanduser("~/.gemini-manager"), exist_ok=True)
     search_dir = os.path.expanduser("~/gm/backups")
     fs.create_dir(search_dir)
     fs.create_file(os.path.join(search_dir, "2025-01-01_120000-test@example.com.gemini-manager.tar.gz"))
