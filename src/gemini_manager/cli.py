@@ -18,17 +18,20 @@ from .recommend import do_recommend
 from .stats import do_stats
 from .reset_helpers import handle_resets_command
 from .profile import do_profile
-from .config import (
-    DEFAULT_GEMINI_HOME,
-    CHAT_HISTORY_BACKUP_PATH
-)
+from .config import DEFAULT_GEMINI_HOME, CHAT_HISTORY_BACKUP_PATH
 from .backup import perform_backup
 from .restore import perform_restore
 from .integrity import perform_integrity_check
 from .list_backups import perform_list_backups
 from .check_b2 import perform_check_b2
 from .sync import perform_sync
-from .chat import backup_chat_history, restore_chat_history, cleanup_chat_history, resume_chat
+from .chat import (
+    backup_chat_history,
+    restore_chat_history,
+    cleanup_chat_history,
+    resume_chat,
+)
+
 
 def main():
     print_logo()

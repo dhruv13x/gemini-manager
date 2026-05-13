@@ -4,9 +4,9 @@
 import os
 import json
 import datetime
-from typing import Dict, Optional
+from typing import Dict
 
-from .ui import cprint, console, NEON_CYAN, NEON_GREEN, NEON_YELLOW, NEON_RED, RESET
+from .ui import cprint, console, NEON_CYAN, NEON_GREEN, NEON_YELLOW, NEON_RED
 from .b2 import B2Manager
 from .credentials import resolve_credentials
 from .reset_helpers import get_all_resets, remove_entry_by_id, sync_resets_with_cloud
@@ -16,13 +16,16 @@ from . import history
 
 from rich.prompt import Confirm
 
+
 def do_reset_all(args):
     """
     Nuclear reset: Wipes all cooldown and reset data from local and cloud.
     """
-    banner_text = "[bold red]⚠️  WARNING: This will wipe ALL account activity and reset data. ⚠️[/]"
+    banner_text = (
+        "[bold red]⚠️  WARNING: This will wipe ALL account activity and reset data. ⚠️[/]"
+    )
     console.print(Panel(Align.center(banner_text), border_style="red"))
-    
+
     if not Confirm.ask("[bold yellow]Are you absolutely sure you want to proceed?[/]"):
         cprint(NEON_YELLOW, "Aborted.")
         return
@@ -41,6 +44,7 @@ def do_reset_all(args):
     # 2. Wipe Local Resets
     # Import here to avoid circular imports if any
     from .reset_helpers import _save_store
+
     try:
         _save_store([])
         cprint(NEON_GREEN, "[OK] Local reset history wiped.")
@@ -53,17 +57,18 @@ def do_reset_all(args):
         if key_id and app_key and bucket_name:
             cprint(NEON_CYAN, "Wiping cloud data...")
             b2 = B2Manager(key_id, app_key, bucket_name)
-            
+
             # Overwrite both cloud files with empty state
             b2.upload_string("{}", "gm-cooldown.json")
             b2.upload_string("[]", "gm-resets.json")
-            
+
             cprint(NEON_GREEN, "[OK] Cloud data wiped successfully.")
-    except Exception as e:
+    except Exception:
         # Creds might not be set, usually fine to skip silent unless explicitly requested
         pass
 
     cprint(NEON_GREEN, "\n✨ System clean. All account timers have been reset.")
+
 
 def do_remove_account(email: str, args=None):
     """
@@ -73,7 +78,7 @@ def do_remove_account(email: str, args=None):
     3. Syncs both changes to cloud (if credentials available)
     """
     cprint(NEON_CYAN, f"Removing account '{email}' from dashboard...")
-    
+
     # 1. Remove from Resets (Logbook)
     removed_resets = remove_entry_by_id(email)
     if removed_resets:
@@ -84,7 +89,7 @@ def do_remove_account(email: str, args=None):
     # 2. Remove from Cooldowns (State)
     path = os.path.expanduser(COOLDOWN_FILE)
     data = get_cooldown_data()
-    
+
     if email in data:
         del data[email]
         try:
@@ -103,10 +108,10 @@ def do_remove_account(email: str, args=None):
         key_id, app_key, bucket_name = resolve_credentials(args)
         if key_id and app_key and bucket_name:
             cprint(NEON_CYAN, "Syncing removal to cloud...")
-            
+
             # 3a. Sync Cooldowns (Direct Upload to ensure removal sticks)
-            _sync_cooldown_file(direction='upload', args=args)
-            
+            _sync_cooldown_file(direction="upload", args=args)
+
             # 3b. Sync Resets (Direct Upload to ensure removal sticks)
             try:
                 b2 = B2Manager(key_id, app_key, bucket_name)
@@ -115,18 +120,20 @@ def do_remove_account(email: str, args=None):
                 resets_json_str = json.dumps(local_resets, ensure_ascii=False, indent=2)
                 b2.upload_string(resets_json_str, "gm-resets.json")
             except Exception as e:
-                 cprint(NEON_RED, f"[WARN] Failed to sync resets removal: {e}")
-                 
+                cprint(NEON_RED, f"[WARN] Failed to sync resets removal: {e}")
+
             cprint(NEON_GREEN, "Cloud sync complete.")
     except Exception:
         # Creds not available, skip silent
         pass
+
+
 from rich.table import Table
 from rich.panel import Panel
 from rich.align import Align
 
 
-from .config import NEON_CYAN, NEON_YELLOW, NEON_GREEN, NEON_RED, RESET, COOLDOWN_FILE
+from .config import NEON_CYAN, NEON_YELLOW, NEON_GREEN, NEON_RED, COOLDOWN_FILE
 
 # File to store cooldown data
 CLOUD_COOLDOWN_FILENAME = "gm-cooldown.json"
@@ -144,18 +151,27 @@ def _sync_cooldown_file(direction: str, args):
     try:
         key_id, app_key, bucket_name = resolve_credentials(args)
         if not all([key_id, app_key, bucket_name]):
-            cprint(NEON_YELLOW, "Warning: Cloud credentials not fully configured. Skipping cloud sync.")
+            cprint(
+                NEON_YELLOW,
+                "Warning: Cloud credentials not fully configured. Skipping cloud sync.",
+            )
             return
 
         b2 = B2Manager(key_id, app_key, bucket_name)
         local_path = os.path.expanduser(COOLDOWN_FILE)
 
         if direction == "download":
-            cprint(NEON_CYAN, f"Downloading latest cooldown file from B2 bucket '{bucket_name}'...")
+            cprint(
+                NEON_CYAN,
+                f"Downloading latest cooldown file from B2 bucket '{bucket_name}'...",
+            )
             content = b2.download_to_string(CLOUD_COOLDOWN_FILENAME)
-            
+
             if content is None:
-                cprint(NEON_YELLOW, "No cooldown file found in the cloud. Using local version.")
+                cprint(
+                    NEON_YELLOW,
+                    "No cooldown file found in the cloud. Using local version.",
+                )
             else:
                 try:
                     os.makedirs(os.path.dirname(local_path), exist_ok=True)
@@ -169,7 +185,9 @@ def _sync_cooldown_file(direction: str, args):
             if not os.path.exists(local_path):
                 cprint(NEON_YELLOW, "Local cooldown file not found. Skipping upload.")
                 return
-            cprint(NEON_CYAN, f"Uploading cooldown file to B2 bucket '{bucket_name}'...")
+            cprint(
+                NEON_CYAN, f"Uploading cooldown file to B2 bucket '{bucket_name}'..."
+            )
             try:
                 b2.upload(local_path, CLOUD_COOLDOWN_FILENAME)
                 cprint(NEON_GREEN, "Cooldown file synced to cloud.")
@@ -200,6 +218,7 @@ def get_cooldown_data() -> Dict[str, str]:
     except (json.JSONDecodeError, IOError):
         return {}
 
+
 def record_switch(email: str, args=None):
     """
     Records an account switch using a "merge-before-write" strategy for cloud sync.
@@ -211,18 +230,18 @@ def record_switch(email: str, args=None):
     """
     if not email:
         return
-        
+
     # Record to history log
     history.record_event(email, "switch")
 
     # If cloud is configured, sync down the master file first to merge with it.
     if args:
-        _sync_cooldown_file(direction='download', args=args)
-        
+        _sync_cooldown_file(direction="download", args=args)
+
     path = os.path.expanduser(COOLDOWN_FILE)
     # Now, get the most up-to-date data (either from cloud or local).
     data = get_cooldown_data()
-    
+
     now = datetime.datetime.now().astimezone()
     now_iso = now.isoformat()
 
@@ -230,48 +249,47 @@ def record_switch(email: str, args=None):
     existing = data.get(email)
     if isinstance(existing, str):
         # Migrate old format to new dict format
-        data[email] = {
-            "first_used": existing,
-            "last_used": now_iso
-        }
+        data[email] = {"first_used": existing, "last_used": now_iso}
     elif isinstance(existing, dict):
         # Already in new format, update last_used
         data[email]["last_used"] = now_iso
-        
+
         # Reset first_used if it's been more than 24 hours since the last session start
         try:
-            first_ts = datetime.datetime.fromisoformat(existing.get("first_used", now_iso))
-            if (now - first_ts).total_seconds() > 86400: # 24 hours
+            first_ts = datetime.datetime.fromisoformat(
+                existing.get("first_used", now_iso)
+            )
+            if (now - first_ts).total_seconds() > 86400:  # 24 hours
                 data[email]["first_used"] = now_iso
         except Exception:
             data[email]["first_used"] = now_iso
     else:
         # New account
-        data[email] = {
-            "first_used": now_iso,
-            "last_used": now_iso
-        }
-    
+        data[email] = {"first_used": now_iso, "last_used": now_iso}
+
     try:
         # Write the newly merged data back to the local file.
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w") as f:
             json.dump(data, f, indent=4)
     except IOError as e:
-        cprint(NEON_RED, f"Error: Could not write to local cooldown file at {path}: {e}")
-        return # Don't proceed to upload if local write failed
+        cprint(
+            NEON_RED, f"Error: Could not write to local cooldown file at {path}: {e}"
+        )
+        return  # Don't proceed to upload if local write failed
 
     # If cloud is configured, sync the merged file back up.
     if args:
-        _sync_cooldown_file(direction='upload', args=args)
+        _sync_cooldown_file(direction="upload", args=args)
+
 
 def do_cooldown_list(args=None):
     """
     Displays the Master Dashboard: merged view of Cooldowns (Switch events) and Scheduled Resets.
     """
     # 1. Sync if requested
-    if args and getattr(args, 'cloud', False):
-        _sync_cooldown_file(direction='download', args=args)
+    if args and getattr(args, "cloud", False):
+        _sync_cooldown_file(direction="download", args=args)
         # Also sync resets
         try:
             key_id, app_key, bucket_name = resolve_credentials(args)
@@ -279,11 +297,11 @@ def do_cooldown_list(args=None):
                 b2 = B2Manager(key_id, app_key, bucket_name)
                 sync_resets_with_cloud(b2)
         except Exception as e:
-             cprint(NEON_RED, f"[WARN] Failed to sync resets: {e}")
+            cprint(NEON_RED, f"[WARN] Failed to sync resets: {e}")
 
     # 2. Load Data
-    cooldown_map = get_cooldown_data() # {email: last_switch_iso}
-    resets_list = get_all_resets()     # [{email:..., reset_ist:...}, ...]
+    cooldown_map = get_cooldown_data()  # {email: last_switch_iso}
+    resets_list = get_all_resets()  # [{email:..., reset_ist:...}, ...]
 
     all_emails = set(cooldown_map.keys())
     for entry in resets_list:
@@ -295,7 +313,9 @@ def do_cooldown_list(args=None):
         return
 
     # 3. Build Table
-    table = Table(show_header=True, header_style="bold white", border_style="blue", padding=(0, 1))
+    table = Table(
+        show_header=True, header_style="bold white", border_style="blue", padding=(0, 1)
+    )
     table.add_column("Account", style="cyan")
     table.add_column("Status", justify="center")
     table.add_column("Availability", style="white")
@@ -304,21 +324,25 @@ def do_cooldown_list(args=None):
     table.add_column("Next Scheduled Reset", style="magenta")
 
     now = datetime.datetime.now().astimezone()
-    
+
     # Helper for relative time
     def format_delta(delta):
         s = int(delta.total_seconds())
-        if s < 0: return "passed"
+        if s < 0:
+            return "passed"
         h, r = divmod(s, 3600)
         m, _ = divmod(r, 60)
         return f"In {h}h {m}m"
 
     def format_ago(delta):
         s = int(delta.total_seconds())
-        if s < 60: return "Just now"
-        if s < 3600: return f"{s//60}m ago"
-        if s < 86400: return f"{s//3600}h ago"
-        return f"{s//86400}d ago"
+        if s < 60:
+            return "Just now"
+        if s < 3600:
+            return f"{s // 60}m ago"
+        if s < 86400:
+            return f"{s // 3600}h ago"
+        return f"{s // 86400}d ago"
 
     sorted_emails = sorted(list(all_emails))
 
@@ -327,7 +351,7 @@ def do_cooldown_list(args=None):
         first_ts = None
         last_ts = None
         tool_unlock_time = None
-        
+
         if email in cooldown_map:
             entry_data = cooldown_map[email]
             if isinstance(entry_data, dict):
@@ -343,8 +367,10 @@ def do_cooldown_list(args=None):
                         first_ts = first_ts.replace(tzinfo=datetime.timezone.utc)
                     first_ts = first_ts.astimezone()
                     # Quota Reset is 24h from FIRST use
-                    tool_unlock_time = first_ts + datetime.timedelta(hours=COOLDOWN_HOURS)
-                
+                    tool_unlock_time = first_ts + datetime.timedelta(
+                        hours=COOLDOWN_HOURS
+                    )
+
                 if last_ts_raw:
                     last_ts = datetime.datetime.fromisoformat(last_ts_raw)
                     if last_ts.tzinfo is None:
@@ -356,39 +382,41 @@ def do_cooldown_list(args=None):
         # --- 2. Hard Resets (Captured from Gemini) ---
         manual_reset_dt = None
         auto_reset_dt = None
-        
+
         my_resets = []
         for r in resets_list:
             if r.get("email", "").lower() == email:
                 try:
                     r_ts = datetime.datetime.fromisoformat(r["reset_ist"])
                     if r_ts.tzinfo is None:
-                         r_ts = r_ts.astimezone()
+                        r_ts = r_ts.astimezone()
                     else:
-                         r_ts = r_ts.astimezone() # Ensure local
-                    
+                        r_ts = r_ts.astimezone()  # Ensure local
+
                     is_auto = "Auto-detected" in r.get("saved_string", "")
                     my_resets.append((r_ts, is_auto))
                 except Exception:
                     pass
-        
+
         my_resets.sort(key=lambda x: x[0])
         for r_ts, auto in my_resets:
             if r_ts > now:
                 if auto:
-                    if not auto_reset_dt: auto_reset_dt = r_ts
+                    if not auto_reset_dt:
+                        auto_reset_dt = r_ts
                 else:
-                    if not manual_reset_dt: manual_reset_dt = r_ts
+                    if not manual_reset_dt:
+                        manual_reset_dt = r_ts
 
         # --- 3. Calculate Availability ---
         # Rule: Max(FirstUsed+24h, ManualReset)
-        # We ignore auto_reset_dt for availability calculation because it's 
+        # We ignore auto_reset_dt for availability calculation because it's
         # redundant with tool_unlock_time (and often less accurate for old data).
         final_unlock_time = tool_unlock_time
         if manual_reset_dt:
             if not final_unlock_time or manual_reset_dt > final_unlock_time:
                 final_unlock_time = manual_reset_dt
-        
+
         # Fallback: if somehow we have NO tool_unlock_time but have an auto_reset, use it.
         if not final_unlock_time and auto_reset_dt:
             final_unlock_time = auto_reset_dt
@@ -404,7 +432,7 @@ def do_cooldown_list(args=None):
             avail_style = "[red]" + availability_str + "[/]"
 
         # --- 4. Format Display Columns ---
-        first_used_str = first_ts.astimezone().strftime('%I:%M %p') if first_ts else "-"
+        first_used_str = first_ts.astimezone().strftime("%I:%M %p") if first_ts else "-"
         last_used_str = format_ago(now - last_ts) if last_ts else "-"
 
         # Next Scheduled Reset Column: Show both if they exist
@@ -417,22 +445,25 @@ def do_cooldown_list(args=None):
             diff = auto_reset_dt - now
             # If it's close to tool_unlock, it's just the 'system' cooldown
             parts.append(f"[dim]{format_delta(diff)} (A)[/]")
-        
+
         next_reset_str = " / ".join(parts) if parts else "-"
 
         # Determine Status
         if is_locked:
-            if manual_reset_dt and manual_reset_dt >= (tool_unlock_time or manual_reset_dt):
+            if manual_reset_dt and manual_reset_dt >= (
+                tool_unlock_time or manual_reset_dt
+            ):
                 status = "[bold yellow]🟡 SCHEDULED[/]"
             else:
                 status = "[bold red]🔴 COOLDOWN[/]"
         else:
             status = "[bold green]🟢 READY[/]"
 
-        table.add_row(email, status, avail_style, first_used_str, last_used_str, next_reset_str)
+        table.add_row(
+            email, status, avail_style, first_used_str, last_used_str, next_reset_str
+        )
 
     console.print("\n[bold white]📊 Account Dashboard[/]")
     console.print(f"[dim]Current Local Time: {now.strftime('%I:%M %p')}[/]\n")
     console.print(table)
     console.print()
-

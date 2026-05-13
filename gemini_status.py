@@ -19,11 +19,7 @@ def clean(text: str) -> str:
 
 # ── RUN GEMINI COMMAND ────────────────────────────────────────────────────────
 def run_gemini(command: str) -> str:
-    cmd = (
-        f"script -qec "
-        f"'gemini --model {MODEL} {command}' "
-        f"/dev/null"
-    )
+    cmd = f"script -qec 'gemini --model {MODEL} {command}' /dev/null"
 
     result = subprocess.run(
         cmd,

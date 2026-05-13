@@ -8,26 +8,25 @@ import os
 
 console = Console()
 
+
 def lerp(a, b, t):
     return a + (b - a) * t
 
+
 def blend(c1, c2, t):
     # Gemini gamma + wave shaping
-    t = t ** 1.47
+    t = t**1.47
     t = 0.82 * t + 0.08 * math.sin(3.2 * t)
     r = int(lerp(c1[0], c2[0], t))
     g = int(lerp(c1[1], c2[1], t))
     b = int(lerp(c1[2], c2[2], t))
     return f"#{r:02x}{g:02x}{b:02x}"
 
+
 def print_logo():
-    import os
-    import random
-    import sys
     import colorsys
     import math
     from rich.console import Console
-    from rich.text import Text
 
     console = Console()
 
@@ -53,7 +52,7 @@ def print_logo():
 
     def blend(c1, c2, t):
         # Gemini gamma + wave shaping (unchanged)
-        t = t ** 1.47
+        t = t**1.47
         t = 0.82 * t + 0.08 * math.sin(3.2 * t)
         r = int(lerp(c1[0], c2[0], t))
         g = int(lerp(c1[1], c2[1], t))
@@ -116,16 +115,13 @@ def print_logo():
             idx = int(idx_env)
             if 0 <= idx < len(fixed_palettes):
                 palette = list(fixed_palettes[idx])
-                mode = f"fixed[{idx}]"
             else:
                 raise ValueError
         except Exception:
             # bad value -> fall through to procedural generation
             palette = None
-            mode = "procedural (bad env fallback)"
     else:
         palette = None
-        mode = "procedural"
 
     # If we didn't get a fixed palette, procedurally generate one (practically infinite variations)
     if palette is None:
@@ -152,7 +148,11 @@ def print_logo():
 
             # convert HSV -> RGB 0..255
             r_f, g_f, b_f = colorsys.hsv_to_rgb(h, s, v)
-            r, g, b = int(round(r_f * 255)), int(round(g_f * 255)), int(round(b_f * 255))
+            r, g, b = (
+                int(round(r_f * 255)),
+                int(round(g_f * 255)),
+                int(round(b_f * 255)),
+            )
 
             palette.append((r, g, b))
 
@@ -161,15 +161,16 @@ def print_logo():
             # shift all values down/up a bit for moody or pastel variants
             delta_v = (_sysrand.random() - 0.5) * 0.18
             new_palette = []
-            for (r, g, b) in palette:
+            for r, g, b in palette:
                 # convert to HSV, adjust v, convert back
                 h, s, v = colorsys.rgb_to_hsv(r / 255.0, g / 255.0, b / 255.0)
                 v = min(max(v + delta_v, 0.2), 1.0)
                 rr, gg, bb = colorsys.hsv_to_rgb(h, s, v)
-                new_palette.append((int(round(rr * 255)), int(round(gg * 255)), int(round(bb * 255))))
+                new_palette.append(
+                    (int(round(rr * 255)), int(round(gg * 255)), int(round(bb * 255)))
+                )
             palette = new_palette
 
-        mode = "procedural"
 
     # permute the palette slightly so gradients shift even when endpoints similar
     _sysrand.shuffle(palette)
@@ -181,7 +182,7 @@ def print_logo():
         W = len(line)
 
         for j, ch in enumerate(line):
-            raw = (i * 0.72 + j * 0.44)
+            raw = i * 0.72 + j * 0.44
             t = raw / (H * 0.72 + W * 0.44)
 
             seg = t * (len(palette) - 1)
@@ -195,4 +196,6 @@ def print_logo():
 
         console.print(tline)
 
-    console.print("[dim]🤖 Powerful CLI interface for interacting with Google Gemini AI.[/dim]\\n")
+    console.print(
+        "[dim]🤖 Powerful CLI interface for interacting with Google Gemini AI.[/dim]\\n"
+    )

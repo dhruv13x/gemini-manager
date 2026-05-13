@@ -2,7 +2,8 @@ import os
 from .b2 import B2Manager
 from .cloud_s3 import S3Provider
 from .ui import console
-from .credentials import resolve_credentials # <--- ADD THIS IMPORT
+from .credentials import resolve_credentials  # <--- ADD THIS IMPORT
+
 
 def get_cloud_provider(args):
     """
@@ -15,7 +16,9 @@ def get_cloud_provider(args):
     s3_region = os.environ.get("GEMINI_S3_REGION", "us-east-1")
 
     # Resolve B2 credentials using the comprehensive resolve_credentials function
-    b2_id, b2_key, b2_bucket = resolve_credentials(args, allow_fail=True) # allow_fail=True so it doesn't sys.exit here
+    b2_id, b2_key, b2_bucket = resolve_credentials(
+        args, allow_fail=True
+    )  # allow_fail=True so it doesn't sys.exit here
 
     # If B2 credentials were resolved, return B2Manager
     if b2_id and b2_key and b2_bucket:
@@ -25,5 +28,7 @@ def get_cloud_provider(args):
     if s3_key and s3_secret and s3_bucket:
         return S3Provider(s3_bucket, s3_key, s3_secret, s3_region)
 
-    console.print("[yellow]No valid cloud credentials found. Please configure B2 or S3.[/]")
+    console.print(
+        "[yellow]No valid cloud credentials found. Please configure B2 or S3.[/]"
+    )
     return None

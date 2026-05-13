@@ -1,8 +1,9 @@
 import os
 import sys
 import requests
-from .ui import cprint, NEON_RED, NEON_YELLOW, NEON_GREEN
+from .ui import cprint, NEON_RED, NEON_YELLOW
 from .settings import get_setting
+
 
 def load_env_file(path):
     """Simple parsing of key=value env file."""
@@ -10,18 +11,19 @@ def load_env_file(path):
         return {}
     env = {}
     try:
-        with open(path, 'r') as f:
+        with open(path, "r") as f:
             for line in f:
                 line = line.strip()
-                if not line or line.startswith('#') or '=' not in line:
+                if not line or line.startswith("#") or "=" not in line:
                     continue
-                key, value = line.split('=', 1)
+                key, value = line.split("=", 1)
                 # simple unquote
                 value = value.strip().strip("'").strip('"')
                 env[key.strip()] = value
     except Exception:
         pass
     return env
+
 
 def get_doppler_token():
     """
@@ -44,22 +46,32 @@ def get_doppler_token():
     dot_env = load_env_file(".env")
     if "DOPPLER_TOKEN" in dot_env:
         return dot_env["DOPPLER_TOKEN"]
-    
+
     return None
+
 
 def fetch_doppler_secrets(token):
     """Fetch secrets from Doppler API using the token."""
     url = "https://api.doppler.com/v3/configs/config/secrets/download?format=json"
     try:
-        response = requests.get(url, headers={"Authorization": f"Bearer {token}"}, timeout=10)
+        response = requests.get(
+            url, headers={"Authorization": f"Bearer {token}"}, timeout=10
+        )
         if response.status_code == 200:
             return response.json()
         else:
             # If we found a token but it failed, we might want to warn but fallback
-            cprint(NEON_YELLOW, f"[WARN] Found DOPPLER_TOKEN but failed to fetch secrets (Status: {response.status_code}).")
+            cprint(
+                NEON_YELLOW,
+                f"[WARN] Found DOPPLER_TOKEN but failed to fetch secrets (Status: {response.status_code}).",
+            )
     except Exception as e:
-        cprint(NEON_YELLOW, f"[WARN] Found DOPPLER_TOKEN but failed to connect to Doppler: {e}")
+        cprint(
+            NEON_YELLOW,
+            f"[WARN] Found DOPPLER_TOKEN but failed to connect to Doppler: {e}",
+        )
     return None
+
 
 def resolve_credentials(args, allow_fail=False):
     """
@@ -72,9 +84,9 @@ def resolve_credentials(args, allow_fail=False):
     """
     # 1. CLI Args (Immediate return if all present, otherwise use as overrides)
     # We start with what we have from CLI
-    c_id = getattr(args, 'b2_id', None)
-    c_key = getattr(args, 'b2_key', None)
-    c_bucket = getattr(args, 'bucket', None)
+    c_id = getattr(args, "b2_id", None)
+    c_key = getattr(args, "b2_key", None)
+    c_bucket = getattr(args, "bucket", None)
 
     if c_id and c_key and c_bucket:
         return c_id, c_key, c_bucket
@@ -114,7 +126,7 @@ def resolve_credentials(args, allow_fail=False):
 
     # 3. Environment Variables
     fill_from(os.environ, "Environment")
-    
+
     if c_id and c_key and c_bucket:
         return c_id, c_key, c_bucket
 
@@ -129,9 +141,12 @@ def resolve_credentials(args, allow_fail=False):
 
     # 5. Persistent Settings (Legacy / Local Config)
     # This uses get_setting which loads from ~/.gemini-manager/config.json
-    if not c_id: c_id = get_setting("b2_id")
-    if not c_key: c_key = get_setting("b2_key")
-    if not c_bucket: c_bucket = get_setting("bucket")
+    if not c_id:
+        c_id = get_setting("b2_id")
+    if not c_key:
+        c_key = get_setting("b2_key")
+    if not c_bucket:
+        c_bucket = get_setting("bucket")
 
     if c_id and c_key and c_bucket:
         return c_id, c_key, c_bucket
@@ -141,10 +156,16 @@ def resolve_credentials(args, allow_fail=False):
         return None, None, None
 
     cprint(NEON_RED, "[ERROR] Missing B2 credentials or bucket name.")
-    cprint(NEON_RED, "We checked: CLI args, Doppler, Environment Variables, .env file, and local config.")
+    cprint(
+        NEON_RED,
+        "We checked: CLI args, Doppler, Environment Variables, .env file, and local config.",
+    )
     cprint(NEON_RED, "Please provide credentials via any of these methods:")
     cprint(NEON_RED, "  1. Doppler (DOPPLER_TOKEN in env/doppler.env/.env)")
-    cprint(NEON_RED, "  2. Environment Variables (GEMINI_B2_KEY_ID, GEMINI_B2_APP_KEY, GEMINI_B2_BUCKET)")
+    cprint(
+        NEON_RED,
+        "  2. Environment Variables (GEMINI_B2_KEY_ID, GEMINI_B2_APP_KEY, GEMINI_B2_BUCKET)",
+    )
     cprint(NEON_RED, "  3. .env file in current directory")
     cprint(NEON_RED, "  4. CLI flags (--b2-id, --b2-key, --bucket)")
     sys.exit(1)

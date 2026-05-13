@@ -1,8 +1,8 @@
 # tests/test_logout.py
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from gemini_manager.logout import do_logout
+
 
 @patch("gemini_manager.logout.run")
 @patch("gemini_manager.logout.os.path.exists")
@@ -14,6 +14,7 @@ def test_do_logout_exists(mock_sub_run, mock_cprint, mock_exists, mock_run):
 
     mock_run.assert_called()
     assert any("Directory removed" in str(c) for c in mock_cprint.call_args_list)
+
 
 @patch("gemini_manager.logout.run")
 @patch("gemini_manager.logout.os.path.exists")

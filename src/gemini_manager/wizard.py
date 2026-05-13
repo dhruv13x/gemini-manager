@@ -1,8 +1,13 @@
 from rich.prompt import Prompt
 from gemini_manager.settings import set_setting
 from gemini_manager.ui import cprint
-from gemini_manager.config import NEON_CYAN, NEON_GREEN, NEON_YELLOW, NEON_RED, DEFAULT_BACKUP_DIR
-import os
+from gemini_manager.config import (
+    NEON_CYAN,
+    NEON_GREEN,
+    NEON_YELLOW,
+    DEFAULT_BACKUP_DIR,
+)
+
 
 def run_wizard():
     """
@@ -17,7 +22,10 @@ def run_wizard():
 
     # We could ask for backup dir, but we have a default.
     # Let's ask if they want to change it.
-    backup_dir = Prompt.ask(f"[{NEON_YELLOW}]Enter Local Backup Directory (default: {DEFAULT_BACKUP_DIR})[/{NEON_YELLOW}]", default=DEFAULT_BACKUP_DIR)
+    backup_dir = Prompt.ask(
+        f"[{NEON_YELLOW}]Enter Local Backup Directory (default: {DEFAULT_BACKUP_DIR})[/{NEON_YELLOW}]",
+        default=DEFAULT_BACKUP_DIR,
+    )
 
     if b2_id:
         set_setting("GEMINI_B2_KEY_ID", b2_id)
@@ -25,7 +33,7 @@ def run_wizard():
         set_setting("GEMINI_B2_APP_KEY", b2_key)
     if bucket:
         set_setting("GEMINI_B2_BUCKET", bucket)
-    
+
     # Save backup_dir if it's different from the default or explicitly set
     if backup_dir and backup_dir != DEFAULT_BACKUP_DIR:
         set_setting("GEMINI_BACKUP_DIR", backup_dir)

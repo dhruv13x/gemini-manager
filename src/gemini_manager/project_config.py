@@ -11,11 +11,12 @@ else:
         # If tomli is missing on old python, we just won't load toml config
         tomllib = None
 
+
 def load_project_config(profile=None):
     """
     Load configuration from pyproject.toml or gemini-manager.toml (or profile specific) in the current directory.
     Returns a dictionary of {arg_name: value}.
-    
+
     Priority:
     1. gemini-manager-<profile>.toml (if profile is set)
     2. gemini-manager.toml ([tool.gemini] or root)
@@ -45,7 +46,7 @@ def load_project_config(profile=None):
                 # Check if it has [tool.gemini] or just keys
                 if "tool" in data and "gm" in data["tool"]:
                     return data["tool"]["gm"]
-                return data # Assume root keys if no [tool.gemini]
+                return data  # Assume root keys if no [tool.gemini]
         except Exception:
             pass
 
@@ -58,8 +59,9 @@ def load_project_config(profile=None):
                     return data["tool"]["gm"]
         except Exception:
             pass
-            
+
     return {}
+
 
 def normalize_config_keys(config):
     """

@@ -1,11 +1,13 @@
 from abc import ABC, abstractmethod
 from typing import List, Optional
 
+
 class CloudFile:
     def __init__(self, name, size, last_modified):
         self.name = name
         self.size = size
         self.last_modified = last_modified
+
 
 class CloudStorageProvider(ABC):
     @abstractmethod

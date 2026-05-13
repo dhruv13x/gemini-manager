@@ -141,9 +141,19 @@ flash_match = re.search(r"Flash\s+.*?(\d+)%\s+(.*)", output_model)
 flash_lite_match = re.search(r"Flash Lite\s+.*?(\d+)%\s+(.*)", output_model)
 pro_match = re.search(r"Pro\s+.*?(\d+)%\s+(.*)", output_model)
 
-flash = f"{flash_match.group(1)}% {flash_match.group(2).strip()}" if flash_match else "N/A"
-flash_lite = f"{flash_lite_match.group(1)}% {flash_lite_match.group(2).strip()}" if flash_lite_match else "N/A"
-pro = f"{pro_match.group(1)}% {pro_match.group(2).strip().rstrip('│')}" if pro_match else "N/A"
+flash = (
+    f"{flash_match.group(1)}% {flash_match.group(2).strip()}" if flash_match else "N/A"
+)
+flash_lite = (
+    f"{flash_lite_match.group(1)}% {flash_lite_match.group(2).strip()}"
+    if flash_lite_match
+    else "N/A"
+)
+pro = (
+    f"{pro_match.group(1)}% {pro_match.group(2).strip().rstrip('│')}"
+    if pro_match
+    else "N/A"
+)
 
 
 # ── CLEANUP ───────────────────────────────────────────────────────────────────

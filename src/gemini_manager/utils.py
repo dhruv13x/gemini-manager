@@ -9,7 +9,6 @@ from .ui import cprint
 from .config import NEON_RED
 
 
-
 def run(cmd):
     """Run a shell command and stream output."""
     try:
@@ -18,6 +17,7 @@ def run(cmd):
         cprint(NEON_RED, f"[ERROR] Command failed: {e}")
         sys.exit(1)
 
+
 def run_capture(cmd):
     """Run a shell command and return output."""
     try:
@@ -25,6 +25,7 @@ def run_capture(cmd):
         return subprocess.check_output(cmd, shell=True).decode("utf-8").strip()
     except subprocess.CalledProcessError:
         return None
+
 
 def read_file(path):
     """Safe file reader."""

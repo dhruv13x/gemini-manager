@@ -1,9 +1,8 @@
-
 import datetime
-from typing import Dict, List
 from collections import defaultdict
 from . import history
-from .ui import console, NEON_CYAN, NEON_GREEN, NEON_YELLOW, NEON_MAGENTA
+from .ui import console
+
 
 def do_stats(args=None):
     """
@@ -13,7 +12,9 @@ def do_stats(args=None):
     events = history.get_events_last_n_days(days_to_show)
 
     if not events:
-        console.print(f"[bold yellow]No usage history found for the last {days_to_show} days.[/]")
+        console.print(
+            f"[bold yellow]No usage history found for the last {days_to_show} days.[/]"
+        )
         return
 
     # Aggregate by day
@@ -29,7 +30,7 @@ def do_stats(args=None):
             ts = datetime.datetime.fromisoformat(ts_str)
             if ts.tzinfo is None:
                 ts = ts.replace(tzinfo=datetime.timezone.utc)
-            
+
             # Localize to machine time
             local_ts = ts.astimezone()
             date_key = local_ts.strftime("%Y-%m-%d")
@@ -43,7 +44,7 @@ def do_stats(args=None):
         d = now - datetime.timedelta(days=i)
         dates.append(d.strftime("%Y-%m-%d"))
 
-    dates.reverse() # Oldest first
+    dates.reverse()  # Oldest first
 
     console.print(f"\n[bold white]📈 Usage Statistics (Last {days_to_show} Days)[/]\n")
 
@@ -63,7 +64,8 @@ def do_stats(args=None):
 
         if count > 0:
             bar = "█" * bar_len
-            if bar_len == 0: bar = "▏" # Tiny bar for non-zero count
+            if bar_len == 0:
+                bar = "▏"  # Tiny bar for non-zero count
             color = "bold green"
         else:
             bar = ""
@@ -71,7 +73,7 @@ def do_stats(args=None):
 
         # Format: YYYY-MM-DD | ████ (4)
         # Shorten date to MM-DD for display
-        display_date = date_str[5:] # Remove YYYY-
+        display_date = date_str[5:]  # Remove YYYY-
 
         console.print(f"  [cyan]{display_date}[/] | [{color}]{bar}[/] ({count})")
 

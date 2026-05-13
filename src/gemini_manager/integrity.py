@@ -4,6 +4,7 @@
 """
 integrity.py - Check integrity of current configuration against the latest backup.
 """
+
 from __future__ import annotations
 import argparse
 import os
@@ -14,12 +15,15 @@ from typing import Optional, Tuple
 from .config import TIMESTAMPED_DIR_REGEX, OLD_CONFIGS_DIR
 import subprocess
 
-from .config import TIMESTAMPED_DIR_REGEX
+
 
 def run(cmd: str, check: bool = True, capture: bool = False):
     if capture:
-        return subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        return subprocess.run(
+            cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+        )
     return subprocess.run(cmd, shell=True, check=check)
+
 
 def parse_timestamp_from_name(name: str) -> Optional[time.struct_time]:
     match = TIMESTAMPED_DIR_REGEX.match(name)
@@ -30,7 +34,8 @@ def parse_timestamp_from_name(name: str) -> Optional[time.struct_time]:
         return time.strptime(ts_str, "%Y-%m-%d_%H%M%S")
     except ValueError:
         return None
-    
+
+
 def find_latest_backup(search_dir: str) -> Optional[str]:
     """
     Search search_dir for directories matching timestamp pattern and return
@@ -55,13 +60,14 @@ def find_latest_backup(search_dir: str) -> Optional[str]:
     candidates.sort(key=lambda x: time.mktime(x[0]), reverse=True)
     return candidates[0][1]
 
+
 def perform_integrity_check(args: argparse.Namespace):
     # Fallback if args missing or None
-    if not hasattr(args, 'src') or args.src is None:
+    if not hasattr(args, "src") or args.src is None:
         args.src = "~/.gemini-manager"
-    
+
     src = os.path.abspath(os.path.expanduser(args.src))
-    
+
     # This command specifically checks against directory backups, so we hardcode the search path
     search_dir = os.path.abspath(os.path.expanduser(OLD_CONFIGS_DIR))
 
@@ -89,13 +95,21 @@ def perform_integrity_check(args: argparse.Namespace):
         if diff_proc.stderr:
             print(diff_proc.stderr)
 
+
 def main():
-    p = argparse.ArgumentParser(description="Check integrity of current configuration against the latest backup.")
-    p.add_argument("--src", default="~/.gemini-manager", help="Source gm dir (default ~/.gemini-manager)")
+    p = argparse.ArgumentParser(
+        description="Check integrity of current configuration against the latest backup."
+    )
+    p.add_argument(
+        "--src",
+        default="~/.gemini-manager",
+        help="Source gm dir (default ~/.gemini-manager)",
+    )
     # The search directory is now fixed, so we can remove this argument from the standalone runner
     # p.add_argument("--search-dir", default=OLD_CONFIGS_DIR, help="Directory to search for timestamped backups")
     args = p.parse_args()
     perform_integrity_check(args)
+
 
 if __name__ == "__main__":
     main()

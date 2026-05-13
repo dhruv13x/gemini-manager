@@ -26,14 +26,17 @@ import shutil
 import subprocess
 import sys
 import time
-import tempfile
 from typing import Optional
-from .config import TIMESTAMPED_DIR_REGEX, DEFAULT_BACKUP_DIR, OLD_CONFIGS_DIR, GEMINI_CLI_HOME
+from .config import (
+    TIMESTAMPED_DIR_REGEX,
+    DEFAULT_BACKUP_DIR,
+    OLD_CONFIGS_DIR,
+    GEMINI_CLI_HOME,
+)
 from .cloud_factory import get_cloud_provider
-from .settings import get_setting
-from .credentials import resolve_credentials
 
 LOCKFILE = os.path.join(GEMINI_CLI_HOME, ".backup.lock")
+
 
 def acquire_lock(path: str = LOCKFILE):
     # Ensure the directory for the lockfile exists
@@ -46,14 +49,20 @@ def acquire_lock(path: str = LOCKFILE):
         sys.exit(2)
     return fd
 
+
 def run(cmd: str, check: bool = True, capture: bool = False):
     if capture:
-        return subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        return subprocess.run(
+            cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+        )
     return subprocess.run(cmd, shell=True, check=check)
+
 
 def shlex_quote(s: str) -> str:
     import shlex
+
     return shlex.quote(s)
+
 
 def read_active_email(gemini_dir: str) -> Optional[str]:
     path = os.path.join(gemini_dir, "google_accounts.json")
@@ -72,12 +81,15 @@ def read_active_email(gemini_dir: str) -> Optional[str]:
     except Exception:
         return None
 
+
 def ensure_dir(path: str):
     os.makedirs(path, exist_ok=True)
+
 
 def make_timestamp() -> str:
     # Format: YYYY-MM-DD_HHMMSS  -> example: 2025-10-22_042211
     return time.strftime("%Y-%m-%d_%H%M%S")
+
 
 def atomic_symlink(target: str, link_name: str):
     """
@@ -100,6 +112,7 @@ def atomic_symlink(target: str, link_name: str):
             except Exception:
                 pass
 
+
 def perform_backup(args: argparse.Namespace):
     """
     Main backup logic separated from argument parsing.
@@ -120,15 +133,22 @@ def perform_backup(args: argparse.Namespace):
         dest_basename = f"{ts}-{active_email}.gemini-manager"
     else:
         dest_basename = f"{ts}-gemini-manager-backup.gemini-manager"
-        print("Warning: could not read active email from google_accounts.json; using fallback name:", dest_basename)
+        print(
+            "Warning: could not read active email from google_accounts.json; using fallback name:",
+            dest_basename,
+        )
 
     if not TIMESTAMPED_DIR_REGEX.match(dest_basename):
-        print(f"Error: Generated backup name '{dest_basename}' does not match the required pattern.")
+        print(
+            f"Error: Generated backup name '{dest_basename}' does not match the required pattern."
+        )
         sys.exit(1)
 
     dest = os.path.join(dest_parent, dest_basename)
     archive_path = os.path.join(archive_dir, f"{dest_basename}.tar.gz")
-    latest_symlink = os.path.join(dest_parent, f"{active_email}.gm") if active_email else None
+    latest_symlink = (
+        os.path.join(dest_parent, f"{active_email}.gm") if active_email else None
+    )
 
     lockfd = acquire_lock()
     try:
@@ -140,12 +160,15 @@ def perform_backup(args: argparse.Namespace):
             run(tar_cmd)
 
             # --- ENCRYPTION LOGIC ---
-            if hasattr(args, 'encrypt') and args.encrypt:
+            if hasattr(args, "encrypt") and args.encrypt:
                 print(f"Encrypting archive: {archive_path} -> .gpg")
                 passphrase = os.environ.get("GEMINI_BACKUP_PASSWORD")
                 if not passphrase:
                     import getpass
-                    passphrase = getpass.getpass("Enter passphrase for backup encryption: ")
+
+                    passphrase = getpass.getpass(
+                        "Enter passphrase for backup encryption: "
+                    )
 
                 if not passphrase:
                     print("Error: Encryption requested but no passphrase provided.")
@@ -154,13 +177,23 @@ def perform_backup(args: argparse.Namespace):
                 encrypted_path = f"{archive_path}.gpg"
                 # gpg --symmetric --cipher-algo AES256 --passphrase-fd 0 --batch --yes --output <out> <in>
                 gpg_cmd = [
-                    "gpg", "--symmetric", "--cipher-algo", "AES256",
-                    "--passphrase-fd", "0", "--batch", "--yes",
-                    "--output", encrypted_path, archive_path
+                    "gpg",
+                    "--symmetric",
+                    "--cipher-algo",
+                    "AES256",
+                    "--passphrase-fd",
+                    "0",
+                    "--batch",
+                    "--yes",
+                    "--output",
+                    encrypted_path,
+                    archive_path,
                 ]
 
                 try:
-                    proc = subprocess.run(gpg_cmd, input=passphrase.encode(), check=False)
+                    proc = subprocess.run(
+                        gpg_cmd, input=passphrase.encode(), check=False
+                    )
                     if proc.returncode != 0:
                         print("Error: GPG encryption failed.")
                         sys.exit(1)
@@ -171,13 +204,15 @@ def perform_backup(args: argparse.Namespace):
                     print(f"Encrypted archive created at: {archive_path}")
 
                 except FileNotFoundError:
-                     print("Error: 'gpg' command not found. Please install GPG or disable encryption.")
-                     sys.exit(1)
+                    print(
+                        "Error: 'gpg' command not found. Please install GPG or disable encryption."
+                    )
+                    sys.exit(1)
             # -------------------------
 
         else:
             print("DRY RUN: would run tar -C ...")
-            if hasattr(args, 'encrypt') and args.encrypt:
+            if hasattr(args, "encrypt") and args.encrypt:
                 print("DRY RUN: would run gpg --symmetric ...")
 
         # 2) Copy to temporary location (sibling of dest)
@@ -195,7 +230,11 @@ def perform_backup(args: argparse.Namespace):
         # 3) Verify copy with diff -r
         print("[3/4] Verifying copy with diff -r")
         if not args.dry_run:
-            diff_proc = run(f"diff -r {shlex_quote(src)} {shlex_quote(tmp_dest)}", check=False, capture=True)
+            diff_proc = run(
+                f"diff -r {shlex_quote(src)} {shlex_quote(tmp_dest)}",
+                check=False,
+                capture=True,
+            )
             if diff_proc.returncode != 0:
                 print("Verification FAILED: diff reported differences.")
                 if diff_proc.stdout:
@@ -227,8 +266,10 @@ def perform_backup(args: argparse.Namespace):
             else:
                 print("No active email available; skipping latest symlink.")
         else:
-            print("DRY RUN: would os.replace(tmp_dest, dest) and update symlink if available")
-        
+            print(
+                "DRY RUN: would os.replace(tmp_dest, dest) and update symlink if available"
+            )
+
         # --- NEW CODE BLOCK: CLOUD UPLOAD ---
         if args.cloud:
             provider = get_cloud_provider(args)
@@ -248,20 +289,40 @@ def perform_backup(args: argparse.Namespace):
         except Exception:
             pass
 
+
 # For backwards compatibility with CLI call via sys.modules or direct import
 def main():
-    p = argparse.ArgumentParser(description="Safe timestamped backup for ~/.gemini-manager (name: YYYY-MM-DD_HHMMSS-email.gm)")
-    p.add_argument("--src", default="~/.gemini-manager", help="Source gm dir (default ~/.gemini-manager)")
-    p.add_argument("--archive-dir", default=DEFAULT_BACKUP_DIR, help="Directory to store tar.gz archives")
-    p.add_argument("--dest-dir-parent", default=OLD_CONFIGS_DIR, help="Parent directory where timestamped backups are stored")
-    p.add_argument("--dry-run", action="store_true", help="Do not perform destructive actions")
-    p.add_argument("--encrypt", action="store_true", help="Encrypt the backup archive using GPG")
+    p = argparse.ArgumentParser(
+        description="Safe timestamped backup for ~/.gemini-manager (name: YYYY-MM-DD_HHMMSS-email.gm)"
+    )
+    p.add_argument(
+        "--src",
+        default="~/.gemini-manager",
+        help="Source gm dir (default ~/.gemini-manager)",
+    )
+    p.add_argument(
+        "--archive-dir",
+        default=DEFAULT_BACKUP_DIR,
+        help="Directory to store tar.gz archives",
+    )
+    p.add_argument(
+        "--dest-dir-parent",
+        default=OLD_CONFIGS_DIR,
+        help="Parent directory where timestamped backups are stored",
+    )
+    p.add_argument(
+        "--dry-run", action="store_true", help="Do not perform destructive actions"
+    )
+    p.add_argument(
+        "--encrypt", action="store_true", help="Encrypt the backup archive using GPG"
+    )
     p.add_argument("--cloud", action="store_true", help="Upload backup to Cloud (B2)")
     p.add_argument("--bucket", help="B2 Bucket Name")
     p.add_argument("--b2-id", help="B2 Key ID (or set env GEMINI_B2_KEY_ID)")
     p.add_argument("--b2-key", help="B2 App Key (or set env GEMINI_B2_APP_KEY)")
     args = p.parse_args()
     perform_backup(args)
+
 
 if __name__ == "__main__":
     main()

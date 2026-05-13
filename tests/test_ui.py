@@ -3,13 +3,15 @@
 import pytest
 from unittest.mock import patch
 from gemini_manager.ui import cprint, banner
-from gemini_manager.config import NEON_GREEN, NEON_CYAN, NEON_MAGENTA, RESET
+from gemini_manager.config import NEON_GREEN
 from rich.console import Console
+
 
 # Use a test console to capture output properly for rich
 @pytest.fixture
 def console(capsys):
     return Console(force_terminal=True, color_system="standard")
+
 
 @patch("sys.stdout.isatty", return_value=True)
 def test_cprint_tty(mock_isatty, capsys):
@@ -32,6 +34,7 @@ def test_cprint_tty(mock_isatty, capsys):
     captured = capsys.readouterr()
     assert "Hello" in captured.out
 
+
 @patch("sys.stdout.isatty", return_value=False)
 def test_cprint_no_tty(mock_isatty, capsys):
     cprint(NEON_GREEN, "Hello")
@@ -39,6 +42,7 @@ def test_cprint_no_tty(mock_isatty, capsys):
     # Even with no tty, if force_terminal is not set on the global console, rich might strip styles.
     # In the original test failure, it got "Hello\n".
     assert "Hello" in captured.out
+
 
 def test_banner(capsys):
     banner()

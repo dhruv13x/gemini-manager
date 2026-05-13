@@ -8,11 +8,14 @@ from gemini_manager.recommend import get_recommendation, AccountStatus
 # Constants matching implementation
 COOLDOWN_HOURS = 24
 
+
 @pytest.fixture
 def mock_data_sources():
-    with patch("gemini_manager.recommend.get_cooldown_data") as mock_cd, \
-         patch("gemini_manager.recommend.get_all_resets") as mock_resets:
+    with patch("gemini_manager.recommend.get_cooldown_data") as mock_cd, patch(
+        "gemini_manager.recommend.get_all_resets"
+    ) as mock_resets:
         yield mock_cd, mock_resets
+
 
 @freeze_time("2025-01-01 12:00:00")
 def test_recommend_no_accounts(mock_data_sources):
@@ -22,6 +25,7 @@ def test_recommend_no_accounts(mock_data_sources):
 
     rec = get_recommendation()
     assert rec is None
+
 
 @freeze_time("2025-01-01 12:00:00")
 def test_recommend_one_ready_account(mock_data_sources):
@@ -35,16 +39,14 @@ def test_recommend_one_ready_account(mock_data_sources):
     t_ready = (now - timedelta(hours=30)).isoformat()
     t_locked = (now - timedelta(hours=1)).isoformat()
 
-    mock_cd.return_value = {
-        "ready@test.com": t_ready,
-        "locked@test.com": t_locked
-    }
+    mock_cd.return_value = {"ready@test.com": t_ready, "locked@test.com": t_locked}
     mock_resets.return_value = []
 
     rec = get_recommendation()
     assert rec is not None
     assert rec.email == "ready@test.com"
     assert rec.status == AccountStatus.READY
+
 
 @freeze_time("2025-01-01 12:00:00")
 def test_recommend_lru_logic(mock_data_sources):
@@ -58,12 +60,11 @@ def test_recommend_lru_logic(mock_data_sources):
     t_recent = (now - timedelta(hours=30)).isoformat()
     t_old = (now - timedelta(hours=100)).isoformat()
 
-    mock_cd.return_value = {
-        "recent@test.com": t_recent,
-        "old@test.com": t_old
-    }
+    mock_cd.return_value = {"recent@test.com": t_recent, "old@test.com": t_old}
     # "unused@test.com" exists in resets (known account) but not in cooldowns (never switched to)
-    mock_resets.return_value = [{"email": "unused@test.com", "reset_ist": "2025-01-01T00:00:00"}]
+    mock_resets.return_value = [
+        {"email": "unused@test.com", "reset_ist": "2025-01-01T00:00:00"}
+    ]
 
     rec = get_recommendation()
     # Logic: Unused (Never) > Oldest Used > ...
@@ -73,6 +74,7 @@ def test_recommend_lru_logic(mock_data_sources):
     mock_resets.return_value = []
     rec = get_recommendation()
     assert rec.email == "old@test.com"
+
 
 @freeze_time("2025-01-01 12:00:00")
 def test_recommend_scheduled_logic(mock_data_sources):
@@ -84,7 +86,7 @@ def test_recommend_scheduled_logic(mock_data_sources):
 
     mock_cd.return_value = {
         "ready@test.com": t_ready,
-        "scheduled@test.com": (now - timedelta(hours=30)).isoformat()
+        "scheduled@test.com": (now - timedelta(hours=30)).isoformat(),
     }
 
     # Scheduled reset 1 hour in future
@@ -96,6 +98,7 @@ def test_recommend_scheduled_logic(mock_data_sources):
     rec = get_recommendation()
     assert rec.email == "ready@test.com"
     assert rec.status == AccountStatus.READY
+
 
 @freeze_time("2025-01-01 12:00:00")
 def test_recommend_all_locked(mock_data_sources):
@@ -109,12 +112,15 @@ def test_recommend_all_locked(mock_data_sources):
 
     rec = get_recommendation()
     assert rec is None
+
+
 import pytest
 import json
 import os
-from unittest.mock import patch, MagicMock
-from gemini_manager.recommend import get_recommendation, do_recommend, AccountStatus
+from unittest.mock import MagicMock
+from gemini_manager.recommend import do_recommend
 from gemini_manager.config import COOLDOWN_FILE
+
 
 def test_get_recommendation_no_data(fs):
     """Test when no data exists."""
@@ -123,6 +129,7 @@ def test_get_recommendation_no_data(fs):
     with patch("gemini_manager.recommend.get_all_resets", return_value=[]):
         rec = get_recommendation()
         assert rec is None
+
 
 def test_get_recommendation_all_locked(fs):
     """Test when all accounts are locked (Cooldown)."""
@@ -138,6 +145,7 @@ def test_get_recommendation_all_locked(fs):
         rec = get_recommendation()
         assert rec is None
 
+
 def test_get_recommendation_ready_sort_lru(fs):
     """Test picking the LRU ready account."""
     if not os.path.exists(os.path.expanduser("~")):
@@ -150,15 +158,16 @@ def test_get_recommendation_ready_sort_lru(fs):
     # old2 used 5 days ago
     old2 = (now - timedelta(days=5)).isoformat()
 
-    fs.create_file(cooldown_path, contents=json.dumps({
-        "newer@test.com": old2,
-        "older@test.com": old1
-    }))
+    fs.create_file(
+        cooldown_path,
+        contents=json.dumps({"newer@test.com": old2, "older@test.com": old1}),
+    )
 
     with patch("gemini_manager.recommend.get_all_resets", return_value=[]):
         rec = get_recommendation()
         assert rec.email == "older@test.com"
         assert rec.status == AccountStatus.READY
+
 
 def test_get_recommendation_never_used_first(fs):
     """Test that never used accounts come before used ones."""
@@ -174,11 +183,14 @@ def test_get_recommendation_never_used_first(fs):
 
     # We need to make sure "new@test.com" is known.
     # It must be in resets list or cooldown list.
-    resets = [{"email": "new@test.com", "reset_ist": (now - timedelta(hours=1)).isoformat()}]
+    resets = [
+        {"email": "new@test.com", "reset_ist": (now - timedelta(hours=1)).isoformat()}
+    ]
 
     with patch("gemini_manager.recommend.get_all_resets", return_value=resets):
         rec = get_recommendation()
         assert rec.email == "new@test.com"
+
 
 def test_get_recommendation_scheduled_ignored(fs):
     """Test that scheduled accounts (even if not recently used) are ignored if logic dictates."""
@@ -197,6 +209,7 @@ def test_get_recommendation_scheduled_ignored(fs):
         rec = get_recommendation()
         assert rec is None
 
+
 def test_do_recommend_success(fs, capsys):
     """Test CLI output for successful recommendation."""
     rec = MagicMock()
@@ -204,9 +217,9 @@ def test_do_recommend_success(fs, capsys):
     rec.last_used = datetime.now(timezone.utc) - timedelta(days=2)
 
     # Patch colors to be valid rich styles or empty
-    with patch("gemini_manager.recommend.NEON_GREEN", "green"), \
-         patch("gemini_manager.recommend.NEON_RED", "red"), \
-         patch("gemini_manager.recommend.get_recommendation", return_value=rec):
+    with patch("gemini_manager.recommend.NEON_GREEN", "green"), patch(
+        "gemini_manager.recommend.NEON_RED", "red"
+    ), patch("gemini_manager.recommend.get_recommendation", return_value=rec):
         do_recommend()
 
     captured = capsys.readouterr()
@@ -214,15 +227,17 @@ def test_do_recommend_success(fs, capsys):
     assert "2d" in captured.out
     assert "Account is Ready" in captured.out
 
+
 def test_do_recommend_none(fs, capsys):
     """Test CLI output when no recommendation found."""
-    with patch("gemini_manager.recommend.NEON_GREEN", "green"), \
-         patch("gemini_manager.recommend.NEON_RED", "red"), \
-         patch("gemini_manager.recommend.get_recommendation", return_value=None):
+    with patch("gemini_manager.recommend.NEON_GREEN", "green"), patch(
+        "gemini_manager.recommend.NEON_RED", "red"
+    ), patch("gemini_manager.recommend.get_recommendation", return_value=None):
         do_recommend()
 
     captured = capsys.readouterr()
     assert "No 'Green' (Ready) accounts" in captured.out
+
 
 def test_do_recommend_never_used(fs, capsys):
     """Test CLI output for never used account."""
@@ -230,9 +245,9 @@ def test_do_recommend_never_used(fs, capsys):
     rec.email = "fresh@test.com"
     rec.last_used = None
 
-    with patch("gemini_manager.recommend.NEON_GREEN", "green"), \
-         patch("gemini_manager.recommend.NEON_RED", "red"), \
-         patch("gemini_manager.recommend.get_recommendation", return_value=rec):
+    with patch("gemini_manager.recommend.NEON_GREEN", "green"), patch(
+        "gemini_manager.recommend.NEON_RED", "red"
+    ), patch("gemini_manager.recommend.get_recommendation", return_value=rec):
         do_recommend()
 
     captured = capsys.readouterr()

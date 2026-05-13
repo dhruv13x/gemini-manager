@@ -1,15 +1,17 @@
 from enum import Enum, auto
 from dataclasses import dataclass
-from typing import Optional, Dict, List, Any
+from typing import Optional
 import datetime
-from .ui import console, cprint, NEON_GREEN, NEON_YELLOW, NEON_RED, NEON_CYAN
+from .ui import console, NEON_RED
 from .cooldown import get_cooldown_data, COOLDOWN_HOURS
 from .reset_helpers import get_all_resets
+
 
 class AccountStatus(Enum):
     READY = auto()
     SCHEDULED = auto()
     COOLDOWN = auto()
+
 
 @dataclass
 class Recommendation:
@@ -17,6 +19,7 @@ class Recommendation:
     status: AccountStatus
     last_used: Optional[datetime.datetime]
     next_reset: Optional[datetime.datetime]
+
 
 def get_recommendation() -> Optional[Recommendation]:
     """
@@ -29,8 +32,8 @@ def get_recommendation() -> Optional[Recommendation]:
     """
 
     # 1. Gather Data
-    cooldown_map = get_cooldown_data() # {email: iso_str}
-    resets_list = get_all_resets()     # [{email: ..., reset_ist: ...}]
+    cooldown_map = get_cooldown_data()  # {email: iso_str}
+    resets_list = get_all_resets()  # [{email: ..., reset_ist: ...}]
 
     # 2. Identify all known accounts
     all_emails = set(cooldown_map.keys())
@@ -60,11 +63,15 @@ def get_recommendation() -> Optional[Recommendation]:
                 if first_ts_raw:
                     first_used_dt = datetime.datetime.fromisoformat(first_ts_raw)
                     if first_used_dt.tzinfo is None:
-                        first_used_dt = first_used_dt.replace(tzinfo=datetime.timezone.utc)
+                        first_used_dt = first_used_dt.replace(
+                            tzinfo=datetime.timezone.utc
+                        )
                 if last_ts_raw:
                     last_used_dt = datetime.datetime.fromisoformat(last_ts_raw)
                     if last_used_dt.tzinfo is None:
-                        last_used_dt = last_used_dt.replace(tzinfo=datetime.timezone.utc)
+                        last_used_dt = last_used_dt.replace(
+                            tzinfo=datetime.timezone.utc
+                        )
             except ValueError:
                 pass
 
@@ -87,7 +94,7 @@ def get_recommendation() -> Optional[Recommendation]:
                     # they are redundant with 'is_locked' and might be less accurate
                     if "Auto-detected" in r.get("saved_string", ""):
                         continue
-                        
+
                     r_ts = datetime.datetime.fromisoformat(r["reset_ist"])
                     if r_ts.tzinfo is None:
                         r_ts = r_ts.astimezone()
@@ -111,12 +118,14 @@ def get_recommendation() -> Optional[Recommendation]:
         else:
             status = AccountStatus.READY
 
-        candidates.append(Recommendation(
-            email=email,
-            status=status,
-            last_used=last_used_dt,
-            next_reset=next_reset_dt
-        ))
+        candidates.append(
+            Recommendation(
+                email=email,
+                status=status,
+                last_used=last_used_dt,
+                next_reset=next_reset_dt,
+            )
+        )
 
     # 3. Filter and Sort
     # We want:
@@ -147,6 +156,7 @@ def get_recommendation() -> Optional[Recommendation]:
 
     return ready_accounts[0]
 
+
 def do_recommend(args=None):
     """
     CLI command to print the recommendation.
@@ -157,8 +167,12 @@ def do_recommend(args=None):
     console.print("[bold white]🤖 Smart Account Recommendation[/]")
 
     if not rec:
-        console.print(f"[{NEON_RED}]No 'Green' (Ready) accounts available right now.[/]")
-        console.print("Check [bold]gm resets[/] to see when accounts will become available.")
+        console.print(
+            f"[{NEON_RED}]No 'Green' (Ready) accounts available right now.[/]"
+        )
+        console.print(
+            "Check [bold]gm resets[/] to see when accounts will become available."
+        )
         return
 
     # It's Green/Ready

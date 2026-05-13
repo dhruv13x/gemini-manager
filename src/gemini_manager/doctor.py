@@ -8,7 +8,6 @@ import urllib.request
 import argparse
 from rich.console import Console
 from rich.table import Table
-from .settings import get_setting
 from .b2 import B2Manager
 from .ui import banner
 from .config import DEFAULT_BACKUP_DIR
@@ -16,10 +15,11 @@ from .credentials import resolve_credentials
 
 console = Console()
 
+
 def do_doctor():
     banner()
     console.print("[bold cyan]🩺  Running System Diagnostic...[/]")
-    
+
     table = Table(show_header=True, header_style="bold magenta")
     table.add_column("Component", style="cyan")
     table.add_column("Status", justify="center")
@@ -35,19 +35,20 @@ def do_doctor():
             table.add_row(f"Tool: {tool}", "[bold red]MISSING[/]", "Not found in PATH")
 
     # Directories
-    dirs = [
-        ("~/.gemini-manager", "Config Dir"),
-        (DEFAULT_BACKUP_DIR, "Backup Dir")
-    ]
+    dirs = [("~/.gemini-manager", "Config Dir"), (DEFAULT_BACKUP_DIR, "Backup Dir")]
     for d, desc in dirs:
         path = os.path.expanduser(d)
         if os.path.isdir(path):
             if os.access(path, os.W_OK):
                 table.add_row(f"Dir: {desc}", "[bold green]OK[/]", f"Writable: {path}")
             else:
-                table.add_row(f"Dir: {desc}", "[bold red]READ-ONLY[/]", f"Exists: {path}")
+                table.add_row(
+                    f"Dir: {desc}", "[bold red]READ-ONLY[/]", f"Exists: {path}"
+                )
         else:
-            table.add_row(f"Dir: {desc}", "[bold yellow]MISSING[/]", f"Not found: {path}")
+            table.add_row(
+                f"Dir: {desc}", "[bold yellow]MISSING[/]", f"Not found: {path}"
+            )
 
     # Internet
     try:
@@ -60,7 +61,7 @@ def do_doctor():
     # Mock args for resolve_credentials (none passed via CLI for doctor usually)
     dummy_args = argparse.Namespace(b2_id=None, b2_key=None, bucket=None)
     key_id, app_key, bucket = resolve_credentials(dummy_args, allow_fail=True)
-    
+
     if key_id and app_key and bucket:
         try:
             B2Manager(key_id, app_key, bucket)

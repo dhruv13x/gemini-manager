@@ -13,16 +13,20 @@ try:
 except ImportError:
     B2Api = None
 
+
 class B2Manager(CloudStorageProvider):
     def __init__(self, key_id, app_key, bucket_name):
         if not B2Api:
-            cprint(NEON_RED, "[ERROR] 'b2sdk' is not installed. Please run: pip install b2sdk")
+            cprint(
+                NEON_RED,
+                "[ERROR] 'b2sdk' is not installed. Please run: pip install b2sdk",
+            )
             sys.exit(1)
-        
+
         self.info = InMemoryAccountInfo()
         self.b2_api = B2Api(self.info)
         self.bucket_name = bucket_name
-        
+
         try:
             cprint(NEON_YELLOW, "[CLOUD] Authenticating with Backblaze B2...")
             self.b2_api.authorize_account("production", key_id, app_key)
@@ -47,36 +51,36 @@ class B2Manager(CloudStorageProvider):
         try:
             for file_version, _ in self.bucket.ls(recursive=True):
                 if file_version.file_name.startswith(prefix):
-                    files.append(CloudFile(
-                        name=file_version.file_name,
-                        size=file_version.size,
-                        last_modified=file_version.upload_timestamp / 1000 # Convert ms to seconds
-                    ))
+                    files.append(
+                        CloudFile(
+                            name=file_version.file_name,
+                            size=file_version.size,
+                            last_modified=file_version.upload_timestamp
+                            / 1000,  # Convert ms to seconds
+                        )
+                    )
         except Exception as e:
             cprint(NEON_RED, f"[CLOUD] List failed: {str(e)}")
         return files
 
     def delete_file(self, remote_path):
-         # B2 SDK delete needs file id usually, but let's try to hide that complexity or implement it properly
-         # B2 simple delete by name isn't direct in older SDKs without getting ID first.
-         try:
+        # B2 SDK delete needs file id usually, but let's try to hide that complexity or implement it properly
+        # B2 simple delete by name isn't direct in older SDKs without getting ID first.
+        try:
             file_version = self.bucket.get_file_info_by_name(remote_path)
             self.bucket.delete_file_version(file_version.id_, remote_path)
             cprint(NEON_GREEN, f"[CLOUD] Deleted {remote_path}")
-         except Exception as e:
-             cprint(NEON_RED, f"[CLOUD] Delete failed: {str(e)}")
+        except Exception as e:
+            cprint(NEON_RED, f"[CLOUD] Delete failed: {str(e)}")
 
     # Original methods kept for compatibility or extended functionality
     def upload(self, local_path, remote_name=None):
         if not remote_name:
             remote_name = os.path.basename(local_path)
-        
+
         cprint(NEON_YELLOW, f"[CLOUD] Uploading {local_path} -> {remote_name}...")
         try:
-            self.bucket.upload_local_file(
-                local_file=local_path,
-                file_name=remote_name
-            )
+            self.bucket.upload_local_file(local_file=local_path, file_name=remote_name)
             cprint(NEON_GREEN, "[CLOUD] Upload successful!")
         except Exception as e:
             cprint(NEON_RED, f"[CLOUD] Upload failed: {str(e)}")
@@ -85,11 +89,8 @@ class B2Manager(CloudStorageProvider):
         """Uploads a string directly to B2."""
         cprint(NEON_YELLOW, f"[CLOUD] Syncing cooldowns -> {remote_name}...")
         try:
-            data_bytes = data_str.encode('utf-8')
-            self.bucket.upload_bytes(
-                data_bytes=data_bytes,
-                file_name=remote_name
-            )
+            data_bytes = data_str.encode("utf-8")
+            self.bucket.upload_bytes(data_bytes=data_bytes, file_name=remote_name)
             cprint(NEON_GREEN, "[CLOUD] Cooldowns synced successfully!")
         except Exception as e:
             cprint(NEON_RED, f"[CLOUD] Upload failed: {str(e)}")
@@ -117,7 +118,7 @@ class B2Manager(CloudStorageProvider):
             mem_file = io.BytesIO()
             download_dest.save(mem_file)
             mem_file.seek(0)
-            return mem_file.read().decode('utf-8')
+            return mem_file.read().decode("utf-8")
         except Exception:
             # Squelch errors (like 404) for this specific helper,
             # assuming caller handles "None" as "file doesn't exist yet".

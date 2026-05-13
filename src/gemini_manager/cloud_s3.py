@@ -1,48 +1,62 @@
-import os
 import boto3
-from botocore.exceptions import ClientError # Import ClientError
+from botocore.exceptions import ClientError  # Import ClientError
 from .cloud_storage import CloudStorageProvider, CloudFile
 from .ui import console
 
+
 class S3Provider(CloudStorageProvider):
-    def __init__(self, bucket_name: str, aws_access_key_id: str, aws_secret_access_key: str, region_name: str = "us-east-1"):
+    def __init__(
+        self,
+        bucket_name: str,
+        aws_access_key_id: str,
+        aws_secret_access_key: str,
+        region_name: str = "us-east-1",
+    ):
         self.bucket_name = bucket_name
         self.client = boto3.client(
             "s3",
             aws_access_key_id=aws_access_key_id,
             aws_secret_access_key=aws_secret_access_key,
-            region_name=region_name
+            region_name=region_name,
         )
 
     def upload_file(self, local_path: str, remote_path: str):
         try:
-            console.print(f"[cyan]Uploading {local_path} to S3://{self.bucket_name}/{remote_path}...[/]")
+            console.print(
+                f"[cyan]Uploading {local_path} to S3://{self.bucket_name}/{remote_path}...[/]"
+            )
             self.client.upload_file(local_path, self.bucket_name, remote_path)
-            console.print(f"[green]Upload successful.[/]")
+            console.print("[green]Upload successful.[/]")
         except Exception as e:
             console.print(f"[bold red]S3 Upload Error:[/ {e}")
             raise
 
     def download_file(self, remote_path: str, local_path: str):
         try:
-            console.print(f"[cyan]Downloading S3://{self.bucket_name}/{remote_path} to {local_path}...[/]")
+            console.print(
+                f"[cyan]Downloading S3://{self.bucket_name}/{remote_path} to {local_path}...[/]"
+            )
             self.client.download_file(self.bucket_name, remote_path, local_path)
-            console.print(f"[green]Download successful.[/]")
+            console.print("[green]Download successful.[/]")
         except Exception as e:
             console.print(f"[bold red]S3 Download Error:[/ {e}")
             raise
 
     def list_files(self, prefix: str = "") -> list[CloudFile]:
         try:
-            response = self.client.list_objects_v2(Bucket=self.bucket_name, Prefix=prefix)
+            response = self.client.list_objects_v2(
+                Bucket=self.bucket_name, Prefix=prefix
+            )
             files = []
             if "Contents" in response:
                 for obj in response["Contents"]:
-                    files.append(CloudFile(
-                        name=obj["Key"],
-                        size=obj["Size"],
-                        last_modified=obj["LastModified"]
-                    ))
+                    files.append(
+                        CloudFile(
+                            name=obj["Key"],
+                            size=obj["Size"],
+                            last_modified=obj["LastModified"],
+                        )
+                    )
             return files
         except Exception as e:
             console.print(f"[bold red]S3 List Error:[/ {e}")
@@ -58,9 +72,13 @@ class S3Provider(CloudStorageProvider):
 
     def upload_string(self, data_str: str, remote_path: str):
         try:
-            console.print(f"[cyan]Syncing string data to S3://{self.bucket_name}/{remote_path}...[/]")
-            self.client.put_object(Bucket=self.bucket_name, Key=remote_path, Body=data_str.encode("utf-8"))
-            console.print(f"[green]Upload successful.[/]")
+            console.print(
+                f"[cyan]Syncing string data to S3://{self.bucket_name}/{remote_path}...[/]"
+            )
+            self.client.put_object(
+                Bucket=self.bucket_name, Key=remote_path, Body=data_str.encode("utf-8")
+            )
+            console.print("[green]Upload successful.[/]")
         except Exception as e:
             console.print(f"[bold red]S3 Upload String Error:[/ {e}")
             raise
@@ -74,7 +92,7 @@ class S3Provider(CloudStorageProvider):
                 return None
             else:
                 console.print(f"[bold red]S3 Download String Error:[/ {e}")
-                raise # Re-raise other ClientErrors
+                raise  # Re-raise other ClientErrors
         except Exception as e:
             console.print(f"[bold red]S3 Download String Error:[/ {e}")
             return None

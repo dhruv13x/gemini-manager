@@ -1,8 +1,7 @@
-
-import pytest
 import datetime
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from gemini_manager import stats
+
 
 def test_do_stats_displays_graph(capsys):
     """Test that do_stats prints a bar chart of usage."""
@@ -15,12 +14,16 @@ def test_do_stats_displays_graph(capsys):
         {"timestamp": now.isoformat(), "email": "a@example.com", "event": "switch"},
         {"timestamp": now.isoformat(), "email": "b@example.com", "event": "switch"},
         {"timestamp": now.isoformat(), "email": "c@example.com", "event": "switch"},
-        {"timestamp": yesterday.isoformat(), "email": "a@example.com", "event": "switch"},
+        {
+            "timestamp": yesterday.isoformat(),
+            "email": "a@example.com",
+            "event": "switch",
+        },
     ]
 
-    with patch("gemini_manager.stats.history.get_events_last_n_days", return_value=events), \
-         patch("gemini_manager.stats.console") as mock_console:
-
+    with patch(
+        "gemini_manager.stats.history.get_events_last_n_days", return_value=events
+    ), patch("gemini_manager.stats.console") as mock_console:
         stats.do_stats()
 
         # Verify calls to console.print
@@ -61,11 +64,12 @@ def test_do_stats_displays_graph(capsys):
         # Should contain bars (using full block character usually)
         assert "█" in full_output
 
+
 def test_do_stats_empty_history():
     """Test do_stats with no history."""
-    with patch("gemini_manager.stats.history.get_events_last_n_days", return_value=[]), \
-         patch("gemini_manager.stats.console") as mock_console:
-
+    with patch(
+        "gemini_manager.stats.history.get_events_last_n_days", return_value=[]
+    ), patch("gemini_manager.stats.console") as mock_console:
         stats.do_stats()
 
         calls = mock_console.print.call_args_list

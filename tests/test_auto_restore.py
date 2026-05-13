@@ -1,9 +1,8 @@
-
 import pytest
 from unittest.mock import patch, MagicMock
-import sys
 import os
 from gemini_manager import restore
+
 
 # Now that restore.py imports get_recommendation, we can patch it directly in restore module
 @patch("gemini_manager.restore.acquire_lock")
@@ -15,7 +14,18 @@ from gemini_manager import restore
 @patch("gemini_manager.restore.shutil.move")
 @patch("shutil.rmtree")
 @patch("tempfile.mkdtemp", return_value="/tmp/restore_tmp")
-def test_restore_auto_success(mock_mkdtemp, mock_rmtree, mock_move, mock_replace, mock_makedirs, mock_exists, mock_run, mock_rec, mock_lock, fs):
+def test_restore_auto_success(
+    mock_mkdtemp,
+    mock_rmtree,
+    mock_move,
+    mock_replace,
+    mock_makedirs,
+    mock_exists,
+    mock_run,
+    mock_rec,
+    mock_lock,
+    fs,
+):
     # Setup mock recommendation
     mock_rec_obj = MagicMock()
     mock_rec_obj.email = "auto@example.com"
@@ -30,9 +40,21 @@ def test_restore_auto_success(mock_mkdtemp, mock_rmtree, mock_move, mock_replace
 
     search_dir = os.path.expanduser("~/.gemini-manager/backups")
     fs.create_dir(search_dir)
-    fs.create_file(os.path.join(search_dir, "2025-10-20_000000-other@example.com.gemini-manager.tar.gz"))
-    fs.create_file(os.path.join(search_dir, "2025-10-21_100000-auto@example.com.gemini-manager.tar.gz")) # Old
-    fs.create_file(os.path.join(search_dir, "2025-10-22_100000-auto@example.com.gemini-manager.tar.gz")) # Latest
+    fs.create_file(
+        os.path.join(
+            search_dir, "2025-10-20_000000-other@example.com.gemini-manager.tar.gz"
+        )
+    )
+    fs.create_file(
+        os.path.join(
+            search_dir, "2025-10-21_100000-auto@example.com.gemini-manager.tar.gz"
+        )
+    )  # Old
+    fs.create_file(
+        os.path.join(
+            search_dir, "2025-10-22_100000-auto@example.com.gemini-manager.tar.gz"
+        )
+    )  # Latest
 
     mock_run.return_value.returncode = 0
 
@@ -55,6 +77,7 @@ def test_restore_auto_success(mock_mkdtemp, mock_rmtree, mock_move, mock_replace
 
     assert found, f"Did not find extraction command for {expected_file}"
 
+
 @patch("gemini_manager.restore.acquire_lock")
 @patch("gemini_manager.restore.get_recommendation")
 def test_restore_auto_no_recommendation(mock_rec, mock_lock, fs):
@@ -65,6 +88,7 @@ def test_restore_auto_no_recommendation(mock_rec, mock_lock, fs):
         # Should exit with error if no recommendation
         assert e.value.code != 0
 
+
 @patch("gemini_manager.restore.acquire_lock")
 @patch("gemini_manager.restore.get_recommendation")
 def test_restore_auto_no_backups_for_email(mock_rec, mock_lock, fs):
@@ -74,12 +98,17 @@ def test_restore_auto_no_backups_for_email(mock_rec, mock_lock, fs):
 
     search_dir = os.path.expanduser("~/.gemini-manager/backups")
     fs.create_dir(search_dir)
-    fs.create_file(os.path.join(search_dir, "2025-10-20_000000-other@example.com.gemini-manager.tar.gz"))
+    fs.create_file(
+        os.path.join(
+            search_dir, "2025-10-20_000000-other@example.com.gemini-manager.tar.gz"
+        )
+    )
 
     with patch("sys.argv", ["restore.py", "--auto"]):
         with pytest.raises(SystemExit) as e:
             restore.main()
         assert e.value.code != 0
+
 
 @patch("gemini_manager.restore.acquire_lock")
 @patch("gemini_manager.restore.get_recommendation")
@@ -87,8 +116,16 @@ def test_find_latest_archive_backup_for_email_robustness(mock_rec, mock_lock, fs
     # Test strict email matching
     search_dir = os.path.expanduser("~/.gemini-manager/backups")
     fs.create_dir(search_dir)
-    fs.create_file(os.path.join(search_dir, "2025-10-20_000000-sue@example.com.gemini-manager.tar.gz"))
-    fs.create_file(os.path.join(search_dir, "2025-10-20_000000-josue@example.com.gemini-manager.tar.gz"))
+    fs.create_file(
+        os.path.join(
+            search_dir, "2025-10-20_000000-sue@example.com.gemini-manager.tar.gz"
+        )
+    )
+    fs.create_file(
+        os.path.join(
+            search_dir, "2025-10-20_000000-josue@example.com.gemini-manager.tar.gz"
+        )
+    )
 
     # We test function directly
     latest = restore.find_latest_archive_backup_for_email(search_dir, "sue@example.com")

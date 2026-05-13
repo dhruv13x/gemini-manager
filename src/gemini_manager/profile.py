@@ -9,6 +9,7 @@ from .config import DEFAULT_GEMINI_HOME
 
 console = Console()
 
+
 def do_profile(args: argparse.Namespace):
     """
     Dispatcher for profile commands.
@@ -19,6 +20,7 @@ def do_profile(args: argparse.Namespace):
         perform_import(args)
     else:
         console.print("[red]Invalid profile command.[/]")
+
 
 def perform_export(args: argparse.Namespace):
     """
@@ -42,13 +44,15 @@ def perform_export(args: argparse.Namespace):
     files_to_export = [
         os.path.expanduser("~/.gm-cooldown.json"),
         os.path.expanduser("~/.gemini_history.json"),
-        os.path.expanduser("~/.gemini_resets.json")
+        os.path.expanduser("~/.gemini_resets.json"),
     ]
 
     if config_file:
         files_to_export.insert(0, config_file)
     else:
-        console.print("[yellow]No gemini-manager.toml found to export. Only history will be saved.[/]")
+        console.print(
+            "[yellow]No gemini-manager.toml found to export. Only history will be saved.[/]"
+        )
 
     try:
         with zipfile.ZipFile(output_path, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -62,6 +66,7 @@ def perform_export(args: argparse.Namespace):
         console.print(f"[bold green]Profile exported successfully to {output_path}[/]")
     except Exception as e:
         console.print(f"[bold red]Export failed:[/ {e}")
+
 
 def perform_import(args: argparse.Namespace):
     """
@@ -80,17 +85,19 @@ def perform_import(args: argparse.Namespace):
 
             # Map filenames to their destination paths
             destinations = {
-                "gemini-manager.toml": "gemini-manager.toml", # Restores to CWD by default
+                "gemini-manager.toml": "gemini-manager.toml",  # Restores to CWD by default
                 ".gm-cooldown.json": os.path.expanduser("~/.gm-cooldown.json"),
                 ".gemini_history.json": os.path.expanduser("~/.gemini_history.json"),
-                ".gemini_resets.json": os.path.expanduser("~/.gemini_resets.json")
+                ".gemini_resets.json": os.path.expanduser("~/.gemini_resets.json"),
             }
 
             # If gemini-manager.toml is in the archive
             if "gemini-manager.toml" in namelist:
                 # If no gemini-manager.toml in CWD, prioritize DEFAULT_GEMINI_HOME
                 if not os.path.exists("gemini-manager.toml"):
-                    destinations["gemini-manager.toml"] = os.path.join(DEFAULT_GEMINI_HOME, "gemini-manager.toml")
+                    destinations["gemini-manager.toml"] = os.path.join(
+                        DEFAULT_GEMINI_HOME, "gemini-manager.toml"
+                    )
                 # Else, it defaults to CWD already as set above
 
             for filename in namelist:
@@ -111,7 +118,9 @@ def perform_import(args: argparse.Namespace):
                         shutil.copyfileobj(source, target)
                     console.print(f"  [green]Restored[/] {dest}")
                 else:
-                    console.print(f"  [dim]Ignored unknown file in archive: {filename}[/]")
+                    console.print(
+                        f"  [dim]Ignored unknown file in archive: {filename}[/]"
+                    )
 
         console.print("[bold green]Profile imported successfully.[/]")
 

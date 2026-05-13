@@ -24,25 +24,29 @@ from typing import Tuple, Optional, List, Dict, Any
 import json
 import os
 import re
-import sys
 import uuid
 import subprocess
 
 from .ui import banner, cprint
-from .config import NEON_CYAN, NEON_YELLOW, NEON_GREEN, NEON_RED, RESET, RESETS_FILE
+from .config import NEON_CYAN, NEON_YELLOW, NEON_GREEN, NEON_RED, RESETS_FILE
 
 # Keep ISO timestamps in UTC for exact comparisons
+
 
 # -------------------------
 # run_cmd_safe (auto-capture)
 # -------------------------
-def run_cmd_safe(cmd: str, timeout: int = 30, capture: bool = True, detect_reset_time: bool = True) -> Tuple[int, str, str]:
+def run_cmd_safe(
+    cmd: str, timeout: int = 30, capture: bool = True, detect_reset_time: bool = True
+) -> Tuple[int, str, str]:
     """
     Run shell command with timeout. Returns (rc, stdout, stderr).
     Automatically detects Gemini rate-limit messages and saves reset time.
     """
     try:
-        proc = subprocess.run(cmd, shell=True, capture_output=capture, text=True, timeout=timeout)
+        proc = subprocess.run(
+            cmd, shell=True, capture_output=capture, text=True, timeout=timeout
+        )
         out = proc.stdout or ""
         err = proc.stderr or ""
 
@@ -82,12 +86,14 @@ def run_cmd_safe(cmd: str, timeout: int = 30, capture: bool = True, detect_reset
                 pass
         return 1, "", str(e)
 
+
 # ------------------------
 # Helpers: storage & I/O
 # ------------------------
 def get_all_resets() -> List[Dict[str, Any]]:
     """Public accessor for reset entries."""
     return _load_store()
+
 
 def _load_store() -> List[Dict[str, Any]]:
     try:
@@ -112,6 +118,7 @@ def _load_store() -> List[Dict[str, Any]]:
     except Exception:
         return []
 
+
 def _save_store(entries: List[Dict[str, Any]]):
     try:
         os.makedirs(os.path.dirname(RESETS_FILE), exist_ok=True)
@@ -121,10 +128,13 @@ def _save_store(entries: List[Dict[str, Any]]):
         # non-fatal: just print a message
         cprint(NEON_YELLOW, f"[WARN] Failed to write store: {e}")
 
+
 IST = timezone(timedelta(hours=5, minutes=30))
+
 
 def _now_local() -> datetime:
     return datetime.now().astimezone()
+
 
 # ------------------------
 # Parsing helpers
@@ -133,10 +143,11 @@ TIME_PATTERNS = [
     # 12-hour with AM/PM: 11:53 AM or 1:05PM
     r"(?P<h>\d{1,2}):(?P<m>\d{1,2})\s*(?P<ampm>AM|PM)",
     # 24-hour (or no AM/PM) 11:53 or 1:05
-    r"(?P<h2>\d{1,2}):(?P<m2>\d{1,2})"
+    r"(?P<h2>\d{1,2}):(?P<m2>\d{1,2})",
 ]
 
 EMAIL_RE = re.compile(r"(?P<email>[\w.+-]+@[\w-]+\.[\w.-]+)")
+
 
 def _parse_time_from_text(text: str) -> Optional[Tuple[int, int, Optional[str]]]:
     """
@@ -156,8 +167,9 @@ def _parse_time_from_text(text: str) -> Optional[Tuple[int, int, Optional[str]]]
     if m2:
         h = int(m2.group(1))
         mi = int(m2.group(2))
-        return (h, mi, None) # AM/PM not provided
+        return (h, mi, None)  # AM/PM not provided
     return None
+
 
 def _normalize_minutes(m: int) -> int:
     # clamp minutes to 0-59
@@ -167,16 +179,20 @@ def _normalize_minutes(m: int) -> int:
         return 59
     return m
 
+
 def _parse_email_from_text(text: str) -> Optional[str]:
     m = EMAIL_RE.search(text)
     if m:
         return m.group("email").strip().lower()
     return None
 
+
 # ------------------------
 # Entry creation & cleanup
 # ------------------------
-def _compute_next_local_for_time(hour: int, minute: int, ampm: Optional[str]=None) -> datetime:
+def _compute_next_local_for_time(
+    hour: int, minute: int, ampm: Optional[str] = None
+) -> datetime:
     """
     Interpret hour/minute possibly with AM/PM. Return the next local datetime for that time.
     Times will be parsed and treated as local machine time.
@@ -185,27 +201,30 @@ def _compute_next_local_for_time(hour: int, minute: int, ampm: Optional[str]=Non
     """
     now = _now_local()
     hour24 = hour
-    if ampm: # Only apply AM/PM logic if ampm is explicitly given
+    if ampm:  # Only apply AM/PM logic if ampm is explicitly given
         ampm = ampm.upper()
         if ampm == "AM":
-            if hour == 12: # 12 AM is 00 in 24-hour
+            if hour == 12:  # 12 AM is 00 in 24-hour
                 hour24 = 0
             else:
                 hour24 = hour % 12
         else:  # PM
-            if hour == 12: # 12 PM is 12 in 24-hour
+            if hour == 12:  # 12 PM is 12 in 24-hour
                 hour24 = 12
             else:
                 hour24 = (hour % 12) + 12
     # If ampm is None, assume hour is already in 24-hour format (0-23)
-    
+
     minute = _normalize_minutes(minute)
     reset_dt = now.replace(hour=hour24, minute=minute, second=0, microsecond=0)
     if reset_dt <= now:
         reset_dt = reset_dt + timedelta(days=1)
     return reset_dt
 
-def add_reset_entry(time_str_raw: str, email: Optional[str]=None, provided_ampm: Optional[str]=None) -> Dict[str,Any]:
+
+def add_reset_entry(
+    time_str_raw: str, email: Optional[str] = None, provided_ampm: Optional[str] = None
+) -> Dict[str, Any]:
     """
     time_str_raw: original captured string like "11:53 AM" or "11:5"
     email: optional email string
@@ -215,27 +234,30 @@ def add_reset_entry(time_str_raw: str, email: Optional[str]=None, provided_ampm:
     parsed = _parse_time_from_text(time_str_raw)
     if not parsed:
         raise ValueError("Could not parse time from input")
-    hour, minute, initial_ampm = parsed # Use initial_ampm from parsed text
-    
+    hour, minute, initial_ampm = parsed  # Use initial_ampm from parsed text
+
     # Use provided_ampm if available, otherwise fall back to initial_ampm
     final_ampm = provided_ampm if provided_ampm else initial_ampm
 
     # if minutes were single-digit like 5 -> 05
     minute = _normalize_minutes(int(minute))
-    reset_dt = _compute_next_local_for_time(int(hour), int(minute), final_ampm) # Pass final_ampm
+    reset_dt = _compute_next_local_for_time(
+        int(hour), int(minute), final_ampm
+    )  # Pass final_ampm
     entry = {
         "id": str(uuid.uuid4())[:8],
         "email": email,
         "saved_string": time_str_raw.strip(),
-        "reset_ist": reset_dt.isoformat(), # Keep key name for compat, but it stores local ISO
-        "saved_at": _now_local().isoformat()
+        "reset_ist": reset_dt.isoformat(),  # Keep key name for compat, but it stores local ISO
+        "saved_at": _now_local().isoformat(),
     }
     entries = _load_store()
     entries.append(entry)
     _save_store(entries)
     return entry
 
-def cleanup_expired() -> List[Dict[str,Any]]:
+
+def cleanup_expired() -> List[Dict[str, Any]]:
     """
     Remove entries whose reset_ist <= now and rewrite store.
     Return list of removed entries.
@@ -257,6 +279,7 @@ def cleanup_expired() -> List[Dict[str,Any]]:
     _save_store(keep)
     return removed
 
+
 # ------------------------
 # Public capture function (enhanced)
 # ------------------------
@@ -273,14 +296,17 @@ def save_reset_time_from_output(text: str) -> bool:
         return False
 
     hour, minute, ampm_from_text = parsed
-    time_str_raw = f"{hour}:{minute:02d}" # Raw time string for add_reset_entry and prompt if needed
+    time_str_raw = f"{hour}:{minute:02d}"  # Raw time string for add_reset_entry and prompt if needed
 
-    final_ampm = ampm_from_text # Start with AM/PM found in text
+    final_ampm = ampm_from_text  # Start with AM/PM found in text
 
-    if not ampm_from_text: # AM/PM not explicitly provided in the text
+    if not ampm_from_text:  # AM/PM not explicitly provided in the text
         # If hour is between 1 and 12, it's ambiguous, so prompt
         if 1 <= hour <= 12:
-            cprint(NEON_YELLOW, f"Ambiguous time '{time_str_raw}'. Please specify AM or PM (e.g., 'AM' or 'PM'):")
+            cprint(
+                NEON_YELLOW,
+                f"Ambiguous time '{time_str_raw}'. Please specify AM or PM (e.g., 'AM' or 'PM'):",
+            )
             user_ampm = input().strip().upper()
             if user_ampm in ("AM", "PM"):
                 final_ampm = user_ampm
@@ -291,22 +317,29 @@ def save_reset_time_from_output(text: str) -> bool:
         # final_ampm remains None, and _compute_next_local_for_time will handle it as 24h.
 
     try:
-        entry = add_reset_entry(time_str_raw, email, final_ampm) # Pass final_ampm to add_reset_entry
-        cprint(NEON_GREEN, f"[OK] Saved reset for {entry.get('email') or '<no-email>'} at {entry['reset_ist']}")
+        entry = add_reset_entry(
+            time_str_raw, email, final_ampm
+        )  # Pass final_ampm to add_reset_entry
+        cprint(
+            NEON_GREEN,
+            f"[OK] Saved reset for {entry.get('email') or '<no-email>'} at {entry['reset_ist']}",
+        )
         return True
     except Exception as e:
         cprint(NEON_RED, f"[ERROR] Failed to save reset: {e}")
         return False
 
+
 # ------------------------
 # Listing & next-reset utilities
 # ------------------------
-def _load_and_cleanup_store() -> List[Dict[str,Any]]:
+def _load_and_cleanup_store() -> List[Dict[str, Any]]:
     # load then cleanup expired entries (auto expiry)
     removed = cleanup_expired()
     if removed:
         cprint(NEON_YELLOW, f"[INFO] Removed {len(removed)} expired reset entries.")
     return _load_store()
+
 
 def do_list_resets():
     banner()
@@ -315,31 +348,34 @@ def do_list_resets():
         cprint(NEON_YELLOW, "No reset schedules saved.")
         return
     cprint(NEON_CYAN, f"Saved reset entries ({len(entries)}):")
-    now = _now_local() # Get current time once for efficiency
+    now = _now_local()  # Get current time once for efficiency
     for e in entries:
         id_ = e.get("id")
         email = e.get("email") or "<no-email>"
         # saved_at = e.get("saved_at") # This is an unused variable reported by vulture, I will remove it.
         reset_at_str = e.get("reset_ist")
-        
+
         remaining_str = "Expired"
         try:
             reset_dt = datetime.fromisoformat(reset_at_str)
             # Display in local time format
             reset_at_display = reset_dt.strftime("%I:%M %p")
-            
+
             delta = reset_dt - now
             if delta.total_seconds() > 0:
                 total_seconds = int(delta.total_seconds())
                 hours = total_seconds // 3600
                 minutes = (total_seconds % 3600) // 60
                 remaining_str = f"In {hours}h {minutes}m"
-            
+
         except Exception:
-            reset_at_display = reset_at_str # Fallback if parsing fails
-            
-        print(f"  {id_:8}  {email:25}  {reset_at_display:14}  {remaining_str:15}") # Removed IST suffix
+            reset_at_display = reset_at_str  # Fallback if parsing fails
+
+        print(
+            f"  {id_:8}  {email:25}  {reset_at_display:14}  {remaining_str:15}"
+        )  # Removed IST suffix
     print()
+
 
 def do_next_reset(identifier: Optional[str] = None):
     """
@@ -359,7 +395,12 @@ def do_next_reset(identifier: Optional[str] = None):
     if identifier:
         ident = identifier.lower()
         # match by email or id prefix
-        filtered = [e for e in entries if (e.get("email") and e["email"].lower() == ident) or e.get("id","").startswith(ident)]
+        filtered = [
+            e
+            for e in entries
+            if (e.get("email") and e["email"].lower() == ident)
+            or e.get("id", "").startswith(ident)
+        ]
         if not filtered:
             cprint(NEON_RED, f"[ERROR] No entries matching '{identifier}'")
             return
@@ -381,7 +422,9 @@ def do_next_reset(identifier: Optional[str] = None):
     # compute remaining
     delta = next_dt - now
     if delta.total_seconds() <= 0:
-        cprint(NEON_YELLOW, "Next reset already passed; it has been expired and removed.")
+        cprint(
+            NEON_YELLOW, "Next reset already passed; it has been expired and removed."
+        )
         cleanup_expired()
         return
 
@@ -392,9 +435,13 @@ def do_next_reset(identifier: Optional[str] = None):
     email = next_entry.get("email") or "<no-email>"
     id_ = next_entry.get("id")
 
-    cprint(NEON_GREEN, f"\nNext reset for {email} (id={id_}): {hours} hours {minutes} minutes")
+    cprint(
+        NEON_GREEN,
+        f"\nNext reset for {email} (id={id_}): {hours} hours {minutes} minutes",
+    )
     cprint(NEON_CYAN, f"Reset time:         {next_dt.strftime('%I:%M %p')}")
     print()
+
 
 def do_capture_reset(pasted_text: str = None):
     """
@@ -411,11 +458,15 @@ def do_capture_reset(pasted_text: str = None):
     else:
         # try reading from stdin if piped
         import sys
+
         if not sys.stdin.isatty():
             text = sys.stdin.read()
         else:
             # interactive prompt fallback
-            cprint(NEON_YELLOW, "Paste the 'Access resets at ... UTC' line and press Enter:")
+            cprint(
+                NEON_YELLOW,
+                "Paste the 'Access resets at ... UTC' line and press Enter:",
+            )
             try:
                 text = input().strip()
             except EOFError:
@@ -429,7 +480,11 @@ def do_capture_reset(pasted_text: str = None):
     if saved:
         cprint(NEON_GREEN, "[OK] Reset time saved.")
     else:
-        cprint(NEON_RED, "[ERROR] Could not parse reset time. Make sure the text contains 'Access resets at HH:MM AM/PM UTC'.")
+        cprint(
+            NEON_RED,
+            "[ERROR] Could not parse reset time. Make sure the text contains 'Access resets at HH:MM AM/PM UTC'.",
+        )
+
 
 # ------------------------
 # Small utilities: remove by id/email
@@ -440,12 +495,15 @@ def remove_entry_by_id(id_or_email: str) -> bool:
     keep = []
     removed = False
     for e in entries:
-        if (e.get("id","").startswith(id_or_email)) or (e.get("email") and e.get("email").lower() == lowered):
+        if (e.get("id", "").startswith(id_or_email)) or (
+            e.get("email") and e.get("email").lower() == lowered
+        ):
             removed = True
             continue
         keep.append(e)
     _save_store(keep)
     return removed
+
 
 # ------------------------
 # Automated Cooldown & Cloud Sync
@@ -463,15 +521,18 @@ def add_24h_cooldown_for_email(email: str) -> Dict[str, Any]:
     try:
         # Local import to avoid circular dependency with cooldown.py
         from .cooldown import get_cooldown_data
+
         cd_data = get_cooldown_data()
         if email in cd_data:
             entry = cd_data[email]
-            first_used_str = entry.get("first_used") if isinstance(entry, dict) else entry
+            first_used_str = (
+                entry.get("first_used") if isinstance(entry, dict) else entry
+            )
             if first_used_str:
                 first_ts = datetime.fromisoformat(first_used_str)
                 if first_ts.tzinfo is None:
                     first_ts = first_ts.astimezone()
-                
+
                 candidate_reset = first_ts + timedelta(hours=24)
                 # If the 24h window from first_used is still in the future, use it.
                 # If it's already passed, it means the session exceeded 24h or first_used is stale,
@@ -486,20 +547,24 @@ def add_24h_cooldown_for_email(email: str) -> Dict[str, Any]:
         "email": email,
         "saved_string": "Auto-detected 24h cooldown on account switch",
         "reset_ist": reset_dt.isoformat(),
-        "saved_at": now.isoformat()
+        "saved_at": now.isoformat(),
     }
-    
+
     entries = _load_store()
-    # Remove existing entries for this email to avoid duplicates, 
+    # Remove existing entries for this email to avoid duplicates,
     # assuming the new 24h cooldown is the most relevant authority.
     # actually, let's just append. The list/merge logic handles duplicates by 'latest' usually.
     # But to be clean, let's remove old ones for this email locally first.
     entries = [e for e in entries if e.get("email") != email]
     entries.append(entry)
-    
+
     _save_store(entries)
-    cprint(NEON_GREEN, f"[INFO] Started 24h cooldown for {email} (until {reset_dt.strftime('%d %b %I:%M %p')})")
+    cprint(
+        NEON_GREEN,
+        f"[INFO] Started 24h cooldown for {email} (until {reset_dt.strftime('%d %b %I:%M %p')})",
+    )
     return entry
+
 
 def merge_resets(local: List[Dict], remote: List[Dict]) -> List[Dict]:
     """
@@ -509,28 +574,29 @@ def merge_resets(local: List[Dict], remote: List[Dict]) -> List[Dict]:
      - For the same email, we allow multiple entries (e.g., Manual and Auto).
     """
     merged_map = {}
-    
+
     for e in local + remote:
         eid = e.get("id")
         if not eid:
             # Fallback if ID is missing (shouldn't happen with new entries)
             eid = f"{e.get('email')}-{e.get('reset_ist')}"
-            
+
         # If we have a collision on ID, we just keep the existing one (or latest).
         # Since local usually comes first in local+remote, local wins on ID collision.
         if eid not in merged_map:
             merged_map[eid] = e
-            
+
     return list(merged_map.values())
+
 
 def sync_resets_with_cloud(provider):
     """
     Downloads cloud cooldowns, merges with local, and pushes back.
     """
     CLOUD_FILE = "gm-resets.json"
-    
+
     cprint(NEON_CYAN, "Syncing cooldowns with cloud...")
-    
+
     # 1. Download
     remote_json_str = provider.download_to_string(CLOUD_FILE)
     remote_entries = []
@@ -539,24 +605,28 @@ def sync_resets_with_cloud(provider):
             remote_entries = json.loads(remote_json_str)
             # Ensure it is a list, otherwise ignore it (e.g. if it was a dict from another tool)
             if not isinstance(remote_entries, list):
-                cprint(NEON_YELLOW, "[WARN] Cloud file format mismatch (expected list). Ignoring remote data.")
+                cprint(
+                    NEON_YELLOW,
+                    "[WARN] Cloud file format mismatch (expected list). Ignoring remote data.",
+                )
                 remote_entries = []
         except json.JSONDecodeError:
             cprint(NEON_YELLOW, "[WARN] Cloud cooldown file was corrupt. Overwriting.")
-    
+
     # 2. Merge
     local_entries = _load_store()
     merged = merge_resets(local_entries, remote_entries)
-    
+
     # 3. Save Local
     _save_store(merged)
-    
+
     # 4. Upload
     try:
         merged_json_str = json.dumps(merged, ensure_ascii=False, indent=2)
         provider.upload_string(merged_json_str, CLOUD_FILE)
     except Exception as e:
         cprint(NEON_RED, f"[ERROR] Failed to upload cooldowns: {e}")
+
 
 def handle_resets_command(args) -> bool:
     """
@@ -585,6 +655,7 @@ def handle_resets_command(args) -> bool:
         return True
 
     return False
+
 
 # ------------------------
 # End of file

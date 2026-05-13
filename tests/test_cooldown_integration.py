@@ -1,7 +1,6 @@
-
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from gemini_manager import cooldown
+
 
 def test_record_switch_records_history(fs):
     """Verify that record_switch calls history.record_event"""
@@ -10,11 +9,11 @@ def test_record_switch_records_history(fs):
     # But since we use pyfakefs (fs fixture), file operations are fine.
 
     # We mock _sync_cooldown_file to avoid network calls or complex logic
-    with patch("gemini_manager.cooldown._sync_cooldown_file"), \
-         patch("gemini_manager.history.record_event") as mock_record:
-
+    with patch("gemini_manager.cooldown._sync_cooldown_file"), patch(
+        "gemini_manager.history.record_event"
+    ) as mock_record:
         # We need to ensure COOLDOWN_FILE_PATH is writable in fs
-        fs.create_dir("/home/jules") # adjust if needed, or rely on expanduser
+        fs.create_dir("/home/jules")  # adjust if needed, or rely on expanduser
 
         cooldown.record_switch("test@example.com")
 

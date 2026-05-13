@@ -2,17 +2,22 @@
 # src/gemini_manager/login.py
 
 
-import os
 import re
 import time
-from typing import Tuple
-import subprocess
-import shutil
 
 from .ui import banner, cprint
-from .utils import run, read_file
-from .config import LOGIN_URL_PATH, NEON_YELLOW, NEON_CYAN, NEON_MAGENTA, NEON_GREEN, NEON_RED, RESET
+from .utils import read_file
+from .config import (
+    LOGIN_URL_PATH,
+    NEON_YELLOW,
+    NEON_CYAN,
+    NEON_MAGENTA,
+    NEON_GREEN,
+    NEON_RED,
+    RESET,
+)
 from .reset_helpers import run_cmd_safe
+
 
 # Improved do_login
 def do_login(retries: int = 2, wait_between: float = 0.8):
@@ -52,12 +57,24 @@ def do_login(retries: int = 2, wait_between: float = 0.8):
 
         # If output does not contain URL/code, check for first-run menu hint and try the ENTER trick
         lower = text.lower()
-        if ("choose a login method" in lower) or ("browser login" in lower) or ("press enter" in lower) or ("choose an option" in lower):
-            cprint(NEON_MAGENTA, "[INFO] FIRST RUN / interactive menu detected — selecting Browser Login (send ENTER).")
-            rc2, out2, err2 = run_cmd_safe(f'printf "\\n" | gm 2> {LOGIN_URL_PATH}', timeout=15, capture=True)
+        if (
+            ("choose a login method" in lower)
+            or ("browser login" in lower)
+            or ("press enter" in lower)
+            or ("choose an option" in lower)
+        ):
+            cprint(
+                NEON_MAGENTA,
+                "[INFO] FIRST RUN / interactive menu detected — selecting Browser Login (send ENTER).",
+            )
+            rc2, out2, err2 = run_cmd_safe(
+                f'printf "\\n" | gm 2> {LOGIN_URL_PATH}', timeout=15, capture=True
+            )
             # after selecting, run gm again to capture the URL
             time.sleep(wait_between)
-            _, out3, err3 = run_cmd_safe(f"gm 2> {LOGIN_URL_PATH}", timeout=30, capture=True)
+            _, out3, err3 = run_cmd_safe(
+                f"gm 2> {LOGIN_URL_PATH}", timeout=30, capture=True
+            )
             try:
                 text = read_file(LOGIN_URL_PATH)
             except Exception:
@@ -71,8 +88,14 @@ def do_login(retries: int = 2, wait_between: float = 0.8):
         if attempt < retries:
             time.sleep(wait_between)
         else:
-            cprint(NEON_RED, "[ERROR] Could not extract login URL or verification code from gm output.")
-            cprint(NEON_YELLOW, f"[INFO] Show file preview (first 15 lines) from {LOGIN_URL_PATH} if present.")
+            cprint(
+                NEON_RED,
+                "[ERROR] Could not extract login URL or verification code from gm output.",
+            )
+            cprint(
+                NEON_YELLOW,
+                f"[INFO] Show file preview (first 15 lines) from {LOGIN_URL_PATH} if present.",
+            )
             try:
                 raw = read_file(LOGIN_URL_PATH)
             except Exception:

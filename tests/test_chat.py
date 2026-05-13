@@ -1,9 +1,7 @@
-
-import pytest
 import os
 import shutil
 from pathlib import Path
-from unittest.mock import patch, Mock
+from unittest.mock import patch
 from gemini_manager.chat import (
     backup_chat_history,
     restore_chat_history,
@@ -12,6 +10,7 @@ from gemini_manager.chat import (
 )
 
 # Note: Using pyfakefs via conftest.py (fs fixture), so file operations are already on fake fs.
+
 
 def test_backup_and_restore_chat_history(fs):
     home_dir = Path("/home/user")
@@ -45,6 +44,7 @@ def test_backup_and_restore_chat_history(fs):
     with open(gemini_tmp_dir / "chat1.txt", "r") as f:
         assert f.read() == "This is a chat history."
 
+
 def test_cleanup_chat_history(fs):
     home_dir = Path("/home/user")
     gemini_home_dir = home_dir / ".gm"
@@ -56,17 +56,21 @@ def test_cleanup_chat_history(fs):
     fs.create_file(gemini_tmp_dir / "bin" / "some_executable", contents="...")
 
     # Cleanup without force (interactive yes)
-    with patch('builtins.input', return_value='y'):
-        cleanup_chat_history(dry_run=False, force=False, gemini_home_dir=str(gemini_home_dir))
+    with patch("builtins.input", return_value="y"):
+        cleanup_chat_history(
+            dry_run=False, force=False, gemini_home_dir=str(gemini_home_dir)
+        )
 
     # Verify that chat1.txt is deleted and bin is preserved
     assert not (gemini_tmp_dir / "chat1.txt").exists()
     assert (gemini_tmp_dir / "bin").exists()
 
+
 @patch("subprocess.run")
 def test_resume_chat(mock_run):
     resume_chat()
     mock_run.assert_called_once_with(["gm", "--model", "pro", "--resume"])
+
 
 def test_backup_chat_history_exception(fs, capsys):
     fs.create_dir("/home/user/.gm/tmp")
@@ -82,6 +86,7 @@ def test_backup_chat_history_exception(fs, capsys):
 
     captured = capsys.readouterr()
     assert "Failed to backup chat history: Copy failed" in captured.out
+
 
 def test_restore_chat_history_exception(fs, capsys):
     fs.create_dir("/backup/tmp")
@@ -101,17 +106,21 @@ def test_restore_chat_history_exception(fs, capsys):
     captured = capsys.readouterr()
     assert "Failed to restore chat history: Restore failed" in captured.out
 
+
 def test_cleanup_chat_history_listdir_exception(fs, capsys):
     fs.create_dir("/home/user/.gm/tmp")
     gemini_home_dir = "/home/user/.gm"
 
     # Patch os.listdir to raise
     with patch("os.listdir", side_effect=Exception("Access denied")):
-        cleanup_chat_history(dry_run=False, force=False, gemini_home_dir=gemini_home_dir)
+        cleanup_chat_history(
+            dry_run=False, force=False, gemini_home_dir=gemini_home_dir
+        )
 
     captured = capsys.readouterr()
     assert "[ERROR] Could not list directory" in captured.out
     assert "Access denied" in captured.out
+
 
 def test_cleanup_chat_history_interactive_cancel(fs, capsys):
     fs.create_dir("/home/user/.gm/tmp")
@@ -119,10 +128,13 @@ def test_cleanup_chat_history_interactive_cancel(fs, capsys):
     gemini_home_dir = "/home/user/.gm"
 
     with patch("builtins.input", return_value="n"):
-        cleanup_chat_history(dry_run=False, force=False, gemini_home_dir=gemini_home_dir)
+        cleanup_chat_history(
+            dry_run=False, force=False, gemini_home_dir=gemini_home_dir
+        )
 
     captured = capsys.readouterr()
     assert "Cleanup cancelled." in captured.out
+
 
 def test_cleanup_chat_history_delete_exception(fs, capsys):
     fs.create_dir("/home/user/.gm/tmp")
@@ -136,12 +148,14 @@ def test_cleanup_chat_history_delete_exception(fs, capsys):
     captured = capsys.readouterr()
     assert "[ERROR] Failed to delete chat.log: Delete failed" in captured.out
 
+
 def test_resume_chat_file_not_found(capsys):
     with patch("subprocess.run", side_effect=FileNotFoundError):
         resume_chat()
 
     captured = capsys.readouterr()
     assert "The 'gm' command was not found" in captured.out
+
 
 def test_resume_chat_exception(capsys):
     with patch("subprocess.run", side_effect=Exception("Unexpected error")):

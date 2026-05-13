@@ -9,11 +9,13 @@ import shutil
 from .credentials import resolve_credentials
 from .config import TIMESTAMPED_DIR_REGEX, OLD_CONFIGS_DIR
 
+
 def parse_ts(name):
     m = TIMESTAMPED_DIR_REGEX.match(name)
     if m:
         return time.strptime(m.group(1), "%Y-%m-%d_%H%M%S")
     return None
+
 
 def get_backup_list(files):
     """
@@ -30,6 +32,7 @@ def get_backup_list(files):
     # Sort: Newest first (descending timestamp)
     valid.sort(key=lambda x: x[0], reverse=True)
     return valid
+
 
 def get_backup_list_dirs(files):
     """
@@ -53,6 +56,7 @@ def get_backup_list_dirs(files):
     valid.sort(key=lambda x: x[0], reverse=True)
     return valid
 
+
 def prune_list(backups, keep_count, dry_run, delete_callback):
     """
     backups: list of (ts, filename) sorted newest first.
@@ -60,7 +64,10 @@ def prune_list(backups, keep_count, dry_run, delete_callback):
     delete_callback: func(filename)
     """
     if len(backups) <= keep_count:
-        cprint(NEON_GREEN, f"Total backups ({len(backups)}) <= keep count ({keep_count}). No pruning needed.")
+        cprint(
+            NEON_GREEN,
+            f"Total backups ({len(backups)}) <= keep count ({keep_count}). No pruning needed.",
+        )
         return
 
     to_keep = backups[:keep_count]
@@ -76,15 +83,16 @@ def prune_list(backups, keep_count, dry_run, delete_callback):
             delete_callback(fname)
             print(f"[DELETED] {fname}")
 
+
 def do_prune(args):
     # backup_dir from args is for archives. Directory backups are in OLD_CONFIGS_DIR
     archive_dir = os.path.abspath(os.path.expanduser(args.backup_dir))
     dir_backup_path = os.path.abspath(os.path.expanduser(OLD_CONFIGS_DIR))
     keep = int(args.keep)
     dry_run = args.dry_run
-    
+
     cprint(NEON_CYAN, "✂️  Gemini Backup Pruning Tool")
-    
+
     # 1. Local Prune
     if not args.cloud_only:
         # Prune Archives
@@ -92,7 +100,7 @@ def do_prune(args):
         if os.path.exists(archive_dir):
             files = os.listdir(archive_dir)
             backups = get_backup_list(files)
-            
+
             def local_delete_file(fname):
                 path = os.path.join(archive_dir, fname)
                 try:
@@ -102,7 +110,7 @@ def do_prune(args):
 
             prune_list(backups, keep, dry_run, local_delete_file)
         else:
-             cprint(NEON_YELLOW, f"Archive backup directory not found: {archive_dir}")
+            cprint(NEON_YELLOW, f"Archive backup directory not found: {archive_dir}")
 
         # Prune Directories
         cprint(NEON_CYAN, f"\n[LOCAL DIRECTORIES] Scanning {dir_backup_path}...")
@@ -130,26 +138,26 @@ def do_prune(args):
             try:
                 b2 = B2Manager(key_id, app_key, bucket_name)
                 files = []
-                cloud_files_map = {} # fname -> file_id (for deletion)
-                
+                cloud_files_map = {}  # fname -> file_id (for deletion)
+
                 for fv, _ in b2.list_backups():
                     files.append(fv.file_name)
                     cloud_files_map[fv.file_name] = fv.id_
-                
+
                 backups = get_backup_list(files)
-                
+
                 def cloud_delete(fname):
                     try:
                         b2.bucket.delete_file_version(cloud_files_map[fname], fname)
                     except Exception as e:
-                         cprint(NEON_RED, f"Failed to delete cloud file {fname}: {e}")
+                        cprint(NEON_RED, f"Failed to delete cloud file {fname}: {e}")
 
                 prune_list(backups, keep, dry_run, cloud_delete)
 
             except Exception as e:
                 cprint(NEON_RED, f"[ERROR] Cloud prune failed: {e}")
         else:
-             if args.cloud_only:
-                 cprint(NEON_RED, "[ERROR] Cloud credentials missing.")
-             else:
-                 cprint(NEON_YELLOW, "\n[CLOUD] Skipping (credentials not set).")
+            if args.cloud_only:
+                cprint(NEON_RED, "[ERROR] Cloud credentials missing.")
+            else:
+                cprint(NEON_YELLOW, "\n[CLOUD] Skipping (credentials not set).")

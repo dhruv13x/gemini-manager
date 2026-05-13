@@ -5,6 +5,7 @@ from typing import List, Dict, Any
 
 from .config import HISTORY_FILE
 
+
 def record_event(email: str, event_type: str = "switch"):
     """
     Appends an event to the history log.
@@ -15,7 +16,7 @@ def record_event(email: str, event_type: str = "switch"):
     entry = {
         "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "email": email,
-        "event": event_type
+        "event": event_type,
     }
 
     events = []
@@ -36,6 +37,7 @@ def record_event(email: str, event_type: str = "switch"):
             json.dump(events, f, indent=2)
     except IOError:
         pass
+
 
 def get_events_last_n_days(n: int) -> List[Dict[str, Any]]:
     """

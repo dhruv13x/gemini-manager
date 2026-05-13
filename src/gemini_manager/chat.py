@@ -3,7 +3,8 @@ import shutil
 import subprocess
 
 from .ui import cprint
-from .config import NEON_GREEN, NEON_RED, NEON_YELLOW, NEON_CYAN, RESET
+from .config import NEON_GREEN, NEON_RED, NEON_YELLOW, NEON_CYAN
+
 
 def backup_chat_history(backup_path: str, gemini_home_dir: str):
     """Backup the chat history from the current user's Gemini directory."""
@@ -61,8 +62,7 @@ def backup_chat_history(backup_path: str, gemini_home_dir: str):
 
                             if len(sessions) > 1:
                                 latest_session = max(
-                                    sessions,
-                                    key=lambda p: os.path.basename(p)
+                                    sessions, key=lambda p: os.path.basename(p)
                                 )
 
                                 for s in sessions:
@@ -124,8 +124,7 @@ def restore_chat_history(backup_path: str, gemini_home_dir: str):
 
                             if len(sessions) > 1:
                                 latest_session = max(
-                                    sessions,
-                                    key=lambda p: os.path.basename(p)
+                                    sessions, key=lambda p: os.path.basename(p)
                                 )
                                 for s in sessions:
                                     if s != latest_session:
@@ -140,9 +139,11 @@ def restore_chat_history(backup_path: str, gemini_home_dir: str):
 def cleanup_chat_history(dry_run: bool, force: bool, gemini_home_dir: str):
     """Clear temporary chat history and logs."""
     target_dir = os.path.join(gemini_home_dir, "tmp")
-    
+
     if not os.path.exists(target_dir):
-        cprint(NEON_YELLOW, f"[INFO] Nothing to clean. Directory not found: {target_dir}")
+        cprint(
+            NEON_YELLOW, f"[INFO] Nothing to clean. Directory not found: {target_dir}"
+        )
         return
 
     # Get list of items to be removed (excluding 'bin')
@@ -155,29 +156,35 @@ def cleanup_chat_history(dry_run: bool, force: bool, gemini_home_dir: str):
     items_to_remove = [item for item in all_items if item != "bin"]
 
     if not items_to_remove:
-        cprint(NEON_GREEN, "[OK] Directory is already clean (only preserved items remain).")
+        cprint(
+            NEON_GREEN, "[OK] Directory is already clean (only preserved items remain)."
+        )
         return
 
     cprint(NEON_CYAN, f"Found {len(items_to_remove)} items to clean in {target_dir}")
-    
+
     if not force and not dry_run:
-        choice = input(f"{NEON_YELLOW}Are you sure you want to proceed? (y/N): ").strip().lower()
-        if choice != 'y':
+        choice = (
+            input(f"{NEON_YELLOW}Are you sure you want to proceed? (y/N): ")
+            .strip()
+            .lower()
+        )
+        if choice != "y":
             cprint(NEON_CYAN, "Cleanup cancelled.")
             return
 
-    cprint(NEON_YELLOW, f"[INFO] Cleaning up...")
-    
+    cprint(NEON_YELLOW, "[INFO] Cleaning up...")
+
     cleaned_count = 0
-    
+
     for item in items_to_remove:
         item_path = os.path.join(target_dir, item)
-        
+
         if dry_run:
             cprint(NEON_YELLOW, f"[DRY-RUN] Would delete: {item}")
             cleaned_count += 1
             continue
-        
+
         try:
             if os.path.isfile(item_path) or os.path.islink(item_path):
                 os.unlink(item_path)
@@ -189,7 +196,10 @@ def cleanup_chat_history(dry_run: bool, force: bool, gemini_home_dir: str):
             cprint(NEON_RED, f"[ERROR] Failed to delete {item}: {e}")
 
     if dry_run:
-        cprint(NEON_GREEN, f"[OK] Cleanup dry run finished. Would remove {cleaned_count} items.")
+        cprint(
+            NEON_GREEN,
+            f"[OK] Cleanup dry run finished. Would remove {cleaned_count} items.",
+        )
     else:
         cprint(NEON_GREEN, f"[OK] Cleanup finished. Removed {cleaned_count} items.")
 
@@ -199,6 +209,8 @@ def resume_chat():
     try:
         subprocess.run(["gm", "--model", "pro", "--resume"])
     except FileNotFoundError:
-        cprint(NEON_RED, "The 'gm' command was not found. Make sure it is in your PATH.")
+        cprint(
+            NEON_RED, "The 'gm' command was not found. Make sure it is in your PATH."
+        )
     except Exception as e:
         cprint(NEON_RED, f"Failed to resume chat: {e}")
