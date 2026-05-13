@@ -299,6 +299,9 @@ def do_cooldown_list(args=None):
     table.add_column("Account", style="cyan")
     table.add_column("Status", justify="center")
     table.add_column("Availability", style="white")
+    table.add_column("Flash", justify="right", style="green")
+    table.add_column("Flash Lite", justify="right", style="green")
+    table.add_column("Pro", justify="right", style="green")
     table.add_column("First Used", style="dim")
     table.add_column("Last Used", style="dim")
     table.add_column("Next Scheduled Reset", style="magenta")
@@ -356,10 +359,14 @@ def do_cooldown_list(args=None):
         # --- 2. Hard Resets (Captured from Gemini) ---
         manual_reset_dt = None
         auto_reset_dt = None
+        models_data = {}
         
         my_resets = []
-        for r in resets_list:
+        # Reverse to get the latest models data if multiple exist
+        for r in reversed(resets_list):
             if r.get("email", "").lower() == email:
+                if not models_data and "models" in r:
+                    models_data = r["models"]
                 try:
                     r_ts = datetime.datetime.fromisoformat(r["reset_ist"])
                     if r_ts.tzinfo is None:
@@ -429,7 +436,11 @@ def do_cooldown_list(args=None):
         else:
             status = "[bold green]🟢 READY[/]"
 
-        table.add_row(email, status, avail_style, first_used_str, last_used_str, next_reset_str)
+        flash_str = f"{models_data.get('Flash', {}).get('percent', '?')}%" if models_data else "-"
+        flash_lite_str = f"{models_data.get('Flash Lite', {}).get('percent', '?')}%" if models_data else "-"
+        pro_str = f"{models_data.get('Pro', {}).get('percent', '?')}%" if models_data else "-"
+
+        table.add_row(email, status, avail_style, flash_str, flash_lite_str, pro_str, first_used_str, last_used_str, next_reset_str)
 
     console.print("\n[bold white]📊 Account Dashboard[/]")
     console.print(f"[dim]Current Local Time: {now.strftime('%I:%M %p')}[/]\n")
