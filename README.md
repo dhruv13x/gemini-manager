@@ -22,25 +22,27 @@
 
 ---
 
-## ⚡ Quick Start (The "5-Minute Rule")
+## 2. ⚡ Quick Start (The "5-Minute Rule")
 
 ### Prerequisites
-- **Python**: 3.8 or higher
-- **Optional**: [AWS CLI](https://aws.amazon.com/cli/) or [Backblaze B2 CLI](https://www.backblaze.com/b2/docs/quick_command_line.html) for credentials management.
+- **Python**: 3.8 or higher. (Compatible up to 3.13)
+- **Optional**: Docker, [AWS CLI](https://aws.amazon.com/cli/), or [Backblaze B2 CLI](https://www.backblaze.com/b2/docs/quick_command_line.html) for credentials management.
 
-### Installation
+### Install
+
+We recommend using `uv` for fast, reproducible installs, but standard `pip` works too.
 
 ```bash
 # Install from PyPI
-pip install gemini-manager
+uv pip install gemini-manager  # or pip install gemini-manager
 
 # Or install from source
-pip install .
+uv pip install .  # or pip install .
 ```
 
-### Get Started Immediately
+### Run
 
-Copy and paste this snippet to configure your first profile, backup to the cloud, and verify your system health.
+Get up and running immediately. Copy and paste this to initialize and use the tool:
 
 ```bash
 # 1. Run the interactive setup wizard
@@ -49,7 +51,7 @@ gm config --init
 # 2. Run your first local backup
 gm backup
 
-# 3. Push your backup to the cloud (requires configured credentials)
+# 3. Push your backup to the cloud
 gm sync push
 
 # 4. Check the account dashboard
@@ -61,12 +63,13 @@ gm recommend
 
 ---
 
-## ✨ Features
+## 3. ✨ Features (The "Why")
 
 ### Core Capabilities
 *   **🛡️ God Level Backups**: Securely backup your configuration and chat history to **Local**, **AWS S3**, or **Backblaze B2** storage. Supports **GPG Encryption** for sensitive data.
 *   **🌍 Machine-Time Adaptive**: Automatically detects and uses your system's local timezone for all calculations and displays. No more manual IST/UTC conversions.
 *   **☁️ Unified Cloud Sync**: Seamlessly `push` and `pull` backups between your local machine and the cloud.
+*   **💬 Chat History Management**: Backup, restore, resume, and clean up temporary chat history with precision.
 
 ### Smart Automation
 *   **⏱️ Smart Session Tracking**: Tracks "First Used" timestamps to accurately predict GM's 24-hour rolling quota resets.
@@ -74,31 +77,22 @@ gm recommend
 *   **🛡️ Accident Protection**: Safeguards your session data by preventing accidental account switches from resetting your 24-hour quota clock.
 
 ### Diagnostics & Management
-*   **📊 Visual Analytics**: View beautiful, terminal-based bar charts of your usage history and account health.
+*   **📊 Visual Analytics**: View beautiful, terminal-based bar charts of your usage history and account health (over the last 7 days).
 *   **🩺 Doctor Mode**: Built-in diagnostic tool to validate your environment, dependencies, and configuration health.
 *   **🧹 Auto-Pruning**: Automatically cleans up old backups and temporary files to keep your storage efficient.
+*   **👥 Profile Management**: Export and import entire user profiles and their corresponding settings.
 
 ---
 
-## 🛠️ Configuration
+## 4. 🛠️ Configuration (The "How")
 
 You can configure `gemini-manager` using **Environment Variables**, **CLI Arguments**, or the **Interactive Config** (`gm config --init`).
 
 **Priority Order**: CLI Arguments > Environment Variables > `.env` / Doppler > Saved Config (`~/.gemini-manager/settings.json`)
 
-### Backup Naming Convention
-
-`gemini-manager` uses a strict naming convention for backups to enable automatic discovery and account rotation.
-
-*   **Archives**: `YYYY-MM-DD_HHMMSS-email@example.com.gemini-manager.tar.gz`
-*   **Encrypted Archives**: `...tar.gz.gpg`
-*   **Metadata**: `YYYY-MM-DD_HHMMSS-email@example.com.gemini-manager.metadata.json`
-
-The timestamp in the filename is typically the **scheduled reset time** (in your local timezone) for that account, allowing the tool to quickly identify which backup belongs to which session window.
-
 ### Environment Variables
 
-| Variable | Description | Default | Required |
+| Name | Description | Default | Required |
 | :--- | :--- | :--- | :--- |
 | `GEMINI_AWS_ACCESS_KEY_ID` | AWS Access Key ID for S3. | None | No (for S3) |
 | `GEMINI_AWS_SECRET_ACCESS_KEY` | AWS Secret Access Key for S3. | None | No (for S3) |
@@ -110,19 +104,22 @@ The timestamp in the filename is typically the **scheduled reset time** (in your
 | `GEMINI_BACKUP_PASSWORD` | Password for GPG encryption. | None | No (for `--encrypt`) |
 | `DOPPLER_TOKEN` | Token for Doppler secrets management. | None | No |
 
-### Key CLI Arguments
+### CLI Arguments
 
-| Command | Flag | Description |
-| :--- | :--- | :--- |
-| `backup` | `--encrypt` | Encrypt the backup archive using GPG. |
-| `restore` | `--auto` | Automatically select and restore the latest backup for the best available account. |
-| `prune` | `--cloud-only` | Only remove old backups from cloud storage, keeping local copies. |
-| `config` | `--force` | Force overwrite existing configuration values. |
-| `cooldown` | `--reset-all` | **DANGER**: Wipe all cooldown data (local and cloud). |
+Below are some of the most powerful and common CLI flags available. Run `gm --help` or `gm <command> --help` for a full list.
+
+| Flag / Command | Description |
+| :--- | :--- |
+| `gm backup --encrypt` | Encrypt the backup archive using GPG. |
+| `gm restore --auto` | Automatically select and restore the latest backup for the best available account. |
+| `gm prune --cloud-only` | Only remove old backups from cloud storage, keeping local copies. |
+| `gm cooldown --reset-all` | **DANGER**: Wipe all cooldown data (local and cloud). |
+| `gm --profile <name>` | Specify a configuration profile to use (e.g., work, personal). |
+| `gm check-integrity` | Verify integrity of current configuration against the latest backup. |
 
 ---
 
-## 🏗️ Architecture
+## 5. 🏗️ Architecture
 
 The `gemini-manager` is built with modularity and extensibility in mind.
 
@@ -136,12 +133,14 @@ src/gemini_manager/
 ├── recommend.py       # 🧠 Recommendation Engine (Session-aware)
 ├── sync.py            # 🔄 Unified Sync (Push/Pull)
 ├── cloud_factory.py   # ☁️ Cloud Provider Abstract Factory
-└── stats.py           # 📊 Visualization Module
+├── stats.py           # 📊 Visualization Module
+├── chat.py            # 💬 Chat management and restoration
+└── profile.py         # 👥 Configuration profiles
 ```
 
-### Data Flow
+### Flow
 1.  **User Input**: CLI args are parsed by `args.py` and routed by `cli.py`.
-2.  **Configuration**: Settings are loaded from `settings_cli.py` (merging Env, CLI, and Config).
+2.  **Configuration**: Settings are loaded from `settings_cli.py` (merging Env, CLI, Doppler, and Config).
 3.  **Action**:
     - **Backup**: Compresses `~/.gemini-manager`, encrypts (optional), and uploads via `CloudFactory`.
     - **Restore**: Fetches list from cloud/local, decrypts, and extracts to `~/.gemini-manager`.
@@ -150,32 +149,34 @@ src/gemini_manager/
 
 ---
 
-## 🐞 Troubleshooting
+## 6. 🐞 Troubleshooting (New in V3)
 
 | Error Message | Possible Cause | Solution |
 | :--- | :--- | :--- |
-| `ModuleNotFoundError: No module named 'gemini_manager'` | Installation issue. | Run `pip install -e .` or ensure you are in the correct venv. |
+| `ModuleNotFoundError: No module named 'gemini_manager'` | Installation issue. | Run `uv pip install -e .` or ensure you are in the correct venv. |
 | `gpg: decryption failed: No secret key` | Missing GPG key or wrong password. | Ensure `GEMINI_BACKUP_PASSWORD` is set or the GPG key is imported. |
-| `ClientError: An error occurred (403) ...` | AWS/B2 Credentials invalid. | Check your `GEMINI_*` env vars or `~/.aws/credentials`. |
+| `ClientError: An error occurred (403) ...` | AWS/B2 Credentials invalid. | Check your `GEMINI_*` env vars, `.env`, or Doppler secrets. |
 | `Permission denied: '~/.gemini-manager'` | File permission issues. | Run `chown -R $USER ~/.gemini-manager` or check directory permissions. |
+| `[WARN] Found DOPPLER_TOKEN but failed to fetch secrets` | Network or Invalid Token. | Check network connectivity and verify `DOPPLER_TOKEN` validity. |
 
 **Debug Mode**: Currently, you can increase verbosity by inspecting the logs or running with standard python tracebacks enabled (default).
 
 ---
 
-## 🤝 Contributing
+## 7. 🤝 Contributing
 
 We welcome contributions! Whether it's reporting a bug, suggesting a feature, or writing code.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed instructions.
 
-1.  **Setup Dev Environment**: `pip install -e .[dev]`
-2.  **Run Tests**: `pytest tests/`
-3.  **Submit PR**: Follow the guidelines in the contributing guide.
+1.  **Setup Dev Environment**: `uv pip install -e .[dev]`
+2.  **Run Tests**: `uv run pytest tests/`
+3.  **Lint Code**: `uv run ruff check src`
+4.  **Submit PR**: Follow the guidelines in the contributing guide.
 
 ---
 
-## 🗺️ Roadmap
+## 8. 🗺️ Roadmap
 
 *   **Phase 1 (Completed)**: Core Backup/Restore, Multi-Cloud (S3/B2), Sync, Auto-Updates.
 *   **Phase 2 (Completed)**: Machine-Time Adaptation, Session Tracking, Smart Rotation.
