@@ -294,7 +294,15 @@ def test_main_else_branch(mock_help):
 
     # What if we just patch parse_args to return empty namespace with command=None?
     with patch("argparse.ArgumentParser.parse_args") as mock_parse:
-        mock_parse.return_value = MagicMock(command=None, login=False, logout=False, session=False, update=False, check_update=False)
+        mock_parse.return_value = MagicMock(
+            command=None, 
+            login=False, 
+            logout=False, 
+            session=False, 
+            update=False, 
+            check_update=False,
+            version=False
+        )
         # We need sys.argv > 1 to avoid first check
         with patch("sys.argv", ["gm", "--something-ignored"]):
             main()

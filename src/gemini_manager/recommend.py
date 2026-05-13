@@ -97,8 +97,9 @@ def _metadata_recommendation(args=None) -> Optional[Recommendation]:
             for info in models.values()
             if isinstance(info, dict) and info.get("percent") is not None
         ]
-        best_quota = max(quota_values) if quota_values else None
-        has_model_quota = best_quota is not None and best_quota > 0
+        # Treat percentages as 'used'. An account has quota if at least one model is < 100% used.
+        min_used = min(quota_values) if quota_values else None
+        has_model_quota = min_used is not None and min_used < 100
 
         status = AccountStatus.READY
         if tool_locked_until and tool_locked_until > now:
@@ -113,8 +114,8 @@ def _metadata_recommendation(args=None) -> Optional[Recommendation]:
             status=status,
             last_used=last_used,
             next_reset=next_reset,
-            quota_percent_left=best_quota,
-            flash_percent_left=flash_percent,
+            quota_percent_left=min_used, # This is now actually 'min_used'
+            flash_percent_left=flash_percent, # This is 'flash_used'
             source="metadata",
         ))
 
@@ -301,9 +302,9 @@ def do_recommend(args=None):
     rec_status = rec.status if isinstance(rec.status, AccountStatus) else AccountStatus.READY
     console.print(f"Status: [bold]{rec_status.name}[/]")
     if isinstance(rec.quota_percent_left, int):
-        console.print(f"Best model quota: [bold]{rec.quota_percent_left}%[/]")
+        console.print(f"Lowest usage (any model): [bold]{rec.quota_percent_left}% used[/]")
     if isinstance(rec.flash_percent_left, int):
-        console.print(f"Flash quota: [bold]{rec.flash_percent_left}%[/]")
+        console.print(f"Flash usage: [bold]{rec.flash_percent_left}% used[/]")
     if isinstance(rec.next_reset, datetime.datetime):
         console.print(f"Available in: [bold]{_format_remaining(rec.next_reset)}[/]")
     source = rec.source if isinstance(rec.source, str) else "legacy"

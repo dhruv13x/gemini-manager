@@ -102,11 +102,25 @@ def _model_percent(models: dict[str, Any], wanted: str) -> int | None:
         normalized = str(name).lower().replace(" ", "")
         if wanted_key not in normalized:
             continue
-        percent = (info or {}).get("percent_left")
+        
+        info = info or {}
+        # If it explicitly says 'left' or 'remaining', we invert it to get 'used'
+        if "percent_left" in info:
+            try:
+                return 100 - int(info["percent_left"])
+            except (TypeError, ValueError):
+                pass
+        if "remaining_percent" in info:
+            try:
+                return 100 - int(info["remaining_percent"])
+            except (TypeError, ValueError):
+                pass
+
+        # Default to 'percent' or 'percent_used', treating them as 'used' (current CLI behavior)
+        percent = info.get("percent_used")
         if percent is None:
-            percent = (info or {}).get("remaining_percent")
-        if percent is None:
-            percent = (info or {}).get("percent")
+            percent = info.get("percent")
+        
         try:
             return int(percent)
         except (TypeError, ValueError):
@@ -115,13 +129,16 @@ def _model_percent(models: dict[str, Any], wanted: str) -> int | None:
 
 
 def _style_percent(value: int | None) -> str:
+    """
+    Colorize the percentage. Higher values mean higher usage, so they get 'worse' colors.
+    """
     if value is None:
         return "[dim]-[/]"
-    if value <= 0:
+    if value >= 100:
         return f"[red]{value}%[/]"
-    if value <= 10:
+    if value >= 90:
         return f"[bright_red]{value}%[/]"
-    if value <= 35:
+    if value >= 65:
         return f"[yellow]{value}%[/]"
     return f"[green]{value}%[/]"
 
@@ -130,14 +147,21 @@ def _quota_text(row: BackupRow) -> str:
     return f"F:{_style_percent(row.flash)} L:{_style_percent(row.lite)} P:{_style_percent(row.pro)}"
 
 
-def _penalty_for_flash(flash: int | None) -> str:
-    if flash is None:
+def _penalty_for_flash(flash_used: int | None) -> str:
+    """
+    Calculate penalty based on Flash usage.
+    0-64% used -> LOW
+    65-89% used -> MEDIUM
+    90-99% used -> HEAVY
+    100%+ used  -> HIGH
+    """
+    if flash_used is None:
         return "[dim]UNKNOWN[/]"
-    if flash <= 0:
+    if flash_used >= 100:
         return "[red]HIGH[/]"
-    if flash <= 10:
+    if flash_used >= 90:
         return "[bright_red]HEAVY[/]"
-    if flash <= 35:
+    if flash_used >= 65:
         return "[yellow]MEDIUM[/]"
     return "[green]LOW[/]"
 

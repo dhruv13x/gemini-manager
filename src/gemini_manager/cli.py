@@ -40,6 +40,15 @@ def main():
     parser = get_parser()
     args = parser.parse_args()
 
+    if args.version:
+        from importlib.metadata import version, PackageNotFoundError
+        try:
+            ver = version('gemini-manager')
+        except PackageNotFoundError:
+            ver = "unknown"
+        print(f"gemini-manager v{ver}")
+        sys.exit(0)
+
     if args.command == "backup":
         perform_backup(args)
     elif args.command == "restore":

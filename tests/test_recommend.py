@@ -285,7 +285,6 @@ def test_get_recommendation_prioritizes_lowest_flash_quota(fs):
     assert rec.email == "zero@test.com"
     assert rec.flash_percent_left == 0
 
-
 def test_get_recommendation_prioritizes_34_over_64_flash_when_no_zero(fs):
     backup_dir = os.path.expanduser("~/.gemini-manager/backups")
     os.makedirs(backup_dir, exist_ok=True)

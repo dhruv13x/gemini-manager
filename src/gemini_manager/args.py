@@ -98,6 +98,7 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument("--session", action="store_true", help="Show current active session")
     parser.add_argument("--update", action="store_true", help="Reinstall / update Gemini CLI")
     parser.add_argument("--check-update", action="store_true", help="Check for updates")
+    parser.add_argument("--version", "-v", action="store_true", help="Show version information")
     parser.add_argument("--profile", help="Specify a configuration profile to use (e.g., work, personal)")
 
     # Backup command

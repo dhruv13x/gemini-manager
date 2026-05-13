@@ -100,9 +100,9 @@ def test_local_rows_latest_per_email_uses_metadata():
     assert len(rows) == 1
     assert rows[0].archive_name == new_archive_name
     assert rows[0].email == "user@example.com"
-    assert rows[0].flash == 12
-    assert rows[0].lite == 0
-    assert rows[0].pro == 100
+    assert rows[0].flash == 88
+    assert rows[0].lite == 100
+    assert rows[0].pro == 0
 
 
 def test_directory_backups_hidden_unless_requested():
