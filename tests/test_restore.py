@@ -45,7 +45,7 @@ def test_parse_timestamp_from_name():
 
 def test_find_oldest_archive_backup(fs):
     backup_dir = "/tmp/backups"
-    fs.create_dir(backup_dir)
+    os.makedirs(backup_dir, exist_ok=True)
     fs.create_file(os.path.join(backup_dir, "2025-10-23_042211-test.gemini-manager.tar.gz"))
     fs.create_file(os.path.join(backup_dir, "2025-10-22_042211-test.gemini-manager.tar.gz"))
 
@@ -54,12 +54,12 @@ def test_find_oldest_archive_backup(fs):
 
 def test_find_oldest_archive_backup_none(fs):
     backup_dir = "/tmp/backups"
-    fs.create_dir(backup_dir)
+    os.makedirs(backup_dir, exist_ok=True)
     assert restore.find_oldest_archive_backup(backup_dir) is None
 
 @patch("gemini_manager.restore.run")
 def test_extract_archive(mock_run, fs):
-    fs.create_dir("/dest")
+    os.makedirs("/dest", exist_ok=True)
     fs.create_file("/archive.tar.gz")
     restore.extract_archive("/archive.tar.gz", "/dest")
     mock_run.assert_called()
@@ -70,8 +70,8 @@ def test_extract_archive(mock_run, fs):
 def test_main_from_dir(mock_replace, mock_run, mock_lock, fs):
     src_dir = "/tmp/backup_source"
     dest_dir = os.path.expanduser("~/.gemini-manager")
-    fs.create_dir(src_dir)
-    fs.create_dir(dest_dir)
+    os.makedirs(src_dir, exist_ok=True)
+    os.makedirs(dest_dir, exist_ok=True)
 
     mock_run.return_value.returncode = 0
 
@@ -88,7 +88,7 @@ def test_main_from_archive(mock_replace, mock_run, mock_lock, fs):
     archive = "/tmp/backup.tar.gz"
     fs.create_file(archive)
     dest_dir = os.path.expanduser("~/.gemini-manager")
-    fs.create_dir(dest_dir)
+    os.makedirs(dest_dir, exist_ok=True)
 
     mock_run.return_value.returncode = 0
 
@@ -102,7 +102,7 @@ def test_main_from_archive(mock_replace, mock_run, mock_lock, fs):
 def test_main_auto_oldest(mock_replace, mock_run, mock_find_oldest, mock_lock, fs):
     fs.create_file("/tmp/oldest.tar.gz")
     dest_dir = os.path.expanduser("~/.gemini-manager")
-    fs.create_dir(dest_dir)
+    os.makedirs(dest_dir, exist_ok=True)
 
     mock_run.return_value.returncode = 0
 
@@ -117,7 +117,7 @@ def test_main_auto_oldest(mock_replace, mock_run, mock_find_oldest, mock_lock, f
 @patch("os.replace")
 def test_main_cloud(mock_replace, mock_sync, mock_run, mock_get_provider, mock_lock, fs):
     dest_dir = os.path.expanduser("~/.gemini-manager")
-    fs.create_dir(dest_dir)
+    os.makedirs(dest_dir, exist_ok=True)
 
     with patch("sys.argv", ["restore.py", "--full", "--cloud", "--bucket", "b", "--b2-id", "i", "--b2-key", "k"]):
         mock_file = MagicMock()
@@ -140,7 +140,7 @@ def test_main_verification_fail(mock_run, mock_lock, fs):
     archive = "/tmp/archive.tar.gz"
     fs.create_file(archive)
     dest_dir = os.path.expanduser("~/.gemini-manager")
-    fs.create_dir(dest_dir)
+    os.makedirs(dest_dir, exist_ok=True)
 
     with patch("sys.argv", ["restore.py", "--full", "--from-archive", archive]):
         mock_run.side_effect = [
@@ -159,7 +159,7 @@ def test_main_post_verification_fail(mock_replace, mock_run, mock_lock, fs):
     archive = "/tmp/archive.tar.gz"
     fs.create_file(archive)
     dest_dir = os.path.expanduser("~/.gemini-manager")
-    fs.create_dir(dest_dir)
+    os.makedirs(dest_dir, exist_ok=True)
 
     with patch("sys.argv", ["restore.py", "--full", "--from-archive", archive]):
         mock_run.side_effect = [
@@ -209,7 +209,7 @@ def test_main_from_dir_not_found(mock_lock, fs):
 def test_main_from_archive_search_dir(mock_replace, mock_lock, fs):
     os.makedirs(os.path.expanduser("~/.gemini-manager"), exist_ok=True)
     search_dir = os.path.expanduser("~/.gemini-manager/backups")
-    fs.create_dir(search_dir)
+    os.makedirs(search_dir, exist_ok=True)
     fs.create_file(os.path.join(search_dir, "archive.tar.gz"))
 
     with patch("gemini_manager.restore.run") as mock_run:
@@ -400,7 +400,7 @@ def test_main_cloud_specific_archive_not_found(mock_get_provider, mock_lock, fs)
 @patch("os.replace")
 def test_main_cleanup_temp_download(mock_replace, mock_sync, mock_run, mock_lock, fs):
     dest_dir = os.path.expanduser("~/.gemini-manager")
-    fs.create_dir(dest_dir)
+    os.makedirs(dest_dir, exist_ok=True)
 
     with patch("sys.argv", ["restore.py", "--full", "--cloud", "--bucket", "b", "--b2-id", "i", "--b2-key", "k"]):
         with patch("gemini_manager.restore.get_cloud_provider") as mock_get_provider:
@@ -461,7 +461,7 @@ def test_restore_auto_local_no_rec(fs, capsys):
 def test_restore_auto_local_success(fs, capsys):
     os.makedirs(os.path.expanduser("~/.gemini-manager"), exist_ok=True)
     search_dir = os.path.expanduser("~/gm/backups")
-    fs.create_dir(search_dir)
+    os.makedirs(search_dir, exist_ok=True)
     fs.create_file(os.path.join(search_dir, "2025-01-01_120000-test@example.com.gemini-manager.tar.gz"))
 
     args = argparse.Namespace(
@@ -495,7 +495,7 @@ def test_restore_auto_local_success(fs, capsys):
 def test_restore_auto_local_not_found(fs, capsys):
     os.makedirs(os.path.expanduser("~/.gemini-manager"), exist_ok=True)
     search_dir = os.path.expanduser("~/gm/backups")
-    fs.create_dir(search_dir)
+    os.makedirs(search_dir, exist_ok=True)
 
     args = argparse.Namespace(
         auto=True,
@@ -589,7 +589,7 @@ def test_restore_cloud_auto_not_found(fs, capsys):
 def test_restore_from_archive_search_fallback(fs, capsys):
     os.makedirs(os.path.expanduser("~/.gemini-manager"), exist_ok=True)
     search_dir = os.path.expanduser("~/gm/backups")
-    fs.create_dir(search_dir)
+    os.makedirs(search_dir, exist_ok=True)
     fs.create_file(os.path.join(search_dir, "mybackup.tar.gz"))
 
     args = argparse.Namespace(
@@ -702,7 +702,7 @@ def test_restore_cloud_specific_fail_cli(fs, capsys):
 def test_restore_auto_cooldown_outgoing(fs, capsys):
     os.makedirs(os.path.expanduser("~/.gemini-manager"), exist_ok=True)
     search_dir = os.path.expanduser("~/gm/backups")
-    fs.create_dir(search_dir)
+    os.makedirs(search_dir, exist_ok=True)
     fs.create_file(os.path.join(search_dir, "2025-01-01_120000-test@example.com.gemini-manager.tar.gz"))
 
     args = argparse.Namespace(
@@ -738,14 +738,14 @@ def test_restore_auto_cooldown_outgoing(fs, capsys):
 def test_restore_defaults_to_auth_only_and_preserves_session_files(fs):
     src_dir = "/tmp/backup_source"
     dest_dir = os.path.expanduser("~/.gemini")
-    fs.create_dir(src_dir)
+    os.makedirs(src_dir, exist_ok=True)
     fs.create_file(os.path.join(src_dir, "google_accounts.json"), contents='{"active":"new@example.com"}')
     fs.create_file(os.path.join(src_dir, "oauth_creds.json"), contents='{"refresh_token":"new"}')
     fs.create_file(os.path.join(src_dir, "installation_id"), contents="new-install")
     fs.create_file(os.path.join(src_dir, "settings.json"), contents='{"security":{"auth":"oauth"}}')
     fs.create_file(os.path.join(src_dir, "state.json"), contents='{"from":"backup"}')
 
-    fs.create_dir(os.path.join(dest_dir, "tmp", "bot-platform", "chats"))
+    os.makedirs(os.path.join(dest_dir, "tmp", "bot-platform", "chats"), exist_ok=True)
     fs.create_file(
         os.path.join(dest_dir, "tmp", "bot-platform", "chats", "session-current.jsonl"),
         contents='{"current":true}\n',
@@ -780,7 +780,7 @@ def test_restore_defaults_to_auth_only_and_preserves_session_files(fs):
 
 def test_restore_email_selects_latest_local_backup(fs):
     search_dir = os.path.expanduser("~/gm/backups")
-    fs.create_dir(search_dir)
+    os.makedirs(search_dir, exist_ok=True)
     latest = os.path.join(search_dir, "2025-01-02_120000-test@example.com.gemini-manager.tar.gz")
     old = os.path.join(search_dir, "2025-01-01_120000-test@example.com.gemini-manager.tar.gz")
     fs.create_file(latest)
@@ -811,7 +811,7 @@ def test_restore_email_selects_latest_local_backup(fs):
 
 def test_restore_cloud_email_selects_latest_backup(fs):
     dest_dir = os.path.expanduser("~/.gemini")
-    fs.create_dir(dest_dir)
+    os.makedirs(dest_dir, exist_ok=True)
 
     args = argparse.Namespace(
         cloud=True,
