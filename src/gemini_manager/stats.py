@@ -1,9 +1,8 @@
 
 import datetime
-from typing import Dict, List
 from collections import defaultdict
 from . import history
-from .ui import console, NEON_CYAN, NEON_GREEN, NEON_YELLOW, NEON_MAGENTA
+from .ui import console
 
 def do_stats(args=None):
     """

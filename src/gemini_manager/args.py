@@ -8,9 +8,7 @@ from rich.panel import Panel
 from .ui import console, print_rich_help
 from .config import (
     DEFAULT_BACKUP_DIR,
-    DEFAULT_GEMINI_HOME,
-    OLD_CONFIGS_DIR,
-    CHAT_HISTORY_BACKUP_PATH
+    OLD_CONFIGS_DIR
 )
 from .project_config import load_project_config, normalize_config_keys
 

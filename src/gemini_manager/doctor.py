@@ -8,7 +8,6 @@ import urllib.request
 import argparse
 from rich.console import Console
 from rich.table import Table
-from .settings import get_setting
 from .b2 import B2Manager
 from .ui import banner
 from .config import DEFAULT_BACKUP_DIR

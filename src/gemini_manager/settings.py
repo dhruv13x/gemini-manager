@@ -4,7 +4,7 @@
 
 import json
 import os
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 CONFIG_FILE = os.path.expanduser("~/.gemini-manager/config.json")
 

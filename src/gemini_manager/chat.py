@@ -3,7 +3,7 @@ import shutil
 import subprocess
 
 from .ui import cprint
-from .config import NEON_GREEN, NEON_RED, NEON_YELLOW, NEON_CYAN, RESET
+from .config import NEON_GREEN, NEON_RED, NEON_YELLOW, NEON_CYAN
 
 def backup_chat_history(backup_path: str, gemini_home_dir: str):
     """Backup the chat history from the current user's Gemini directory."""
@@ -166,7 +166,7 @@ def cleanup_chat_history(dry_run: bool, force: bool, gemini_home_dir: str):
             cprint(NEON_CYAN, "Cleanup cancelled.")
             return
 
-    cprint(NEON_YELLOW, f"[INFO] Cleaning up...")
+    cprint(NEON_YELLOW, "[INFO] Cleaning up...")
     
     cleaned_count = 0
     

@@ -1,4 +1,3 @@
-import os
 import boto3
 from botocore.exceptions import ClientError # Import ClientError
 from .cloud_storage import CloudStorageProvider, CloudFile
@@ -18,7 +17,7 @@ class S3Provider(CloudStorageProvider):
         try:
             console.print(f"[cyan]Uploading {local_path} to S3://{self.bucket_name}/{remote_path}...[/]")
             self.client.upload_file(local_path, self.bucket_name, remote_path)
-            console.print(f"[green]Upload successful.[/]")
+            console.print("[green]Upload successful.[/]")
         except Exception as e:
             console.print(f"[bold red]S3 Upload Error:[/ {e}")
             raise
@@ -27,7 +26,7 @@ class S3Provider(CloudStorageProvider):
         try:
             console.print(f"[cyan]Downloading S3://{self.bucket_name}/{remote_path} to {local_path}...[/]")
             self.client.download_file(self.bucket_name, remote_path, local_path)
-            console.print(f"[green]Download successful.[/]")
+            console.print("[green]Download successful.[/]")
         except Exception as e:
             console.print(f"[bold red]S3 Download Error:[/ {e}")
             raise
@@ -60,7 +59,7 @@ class S3Provider(CloudStorageProvider):
         try:
             console.print(f"[cyan]Syncing string data to S3://{self.bucket_name}/{remote_path}...[/]")
             self.client.put_object(Bucket=self.bucket_name, Key=remote_path, Body=data_str.encode("utf-8"))
-            console.print(f"[green]Upload successful.[/]")
+            console.print("[green]Upload successful.[/]")
         except Exception as e:
             console.print(f"[bold red]S3 Upload String Error:[/ {e}")
             raise

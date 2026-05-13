@@ -2,7 +2,6 @@
 # src/gemini_manager/ui.py
 
 
-import os
 import sys
 from rich.console import Console
 from rich.panel import Panel
@@ -10,7 +9,7 @@ from rich.align import Align
 from rich.text import Text
 from rich.table import Table
 
-from .config import NEON_GREEN, NEON_CYAN, NEON_YELLOW, NEON_MAGENTA, NEON_RED, RESET
+from .config import RESET
 
 # Export console for use in other modules
 console = Console()

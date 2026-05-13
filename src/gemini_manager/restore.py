@@ -22,7 +22,6 @@ from __future__ import annotations
 import argparse
 import fcntl
 import os
-import re
 import shlex
 import shutil
 import subprocess
@@ -30,14 +29,12 @@ import sys
 import tempfile
 import time
 from typing import Optional, Tuple
-from .config import DEFAULT_BACKUP_DIR, NEON_GREEN, NEON_RED, NEON_YELLOW, NEON_CYAN, RESET, DEFAULT_GEMINI_HOME, TIMESTAMPED_DIR_REGEX, OLD_CONFIGS_DIR, GEMINI_CLI_HOME
+from .config import DEFAULT_BACKUP_DIR, NEON_GREEN, NEON_RED, NEON_YELLOW, NEON_CYAN, TIMESTAMPED_DIR_REGEX, OLD_CONFIGS_DIR, GEMINI_CLI_HOME
 from .cloud_factory import get_cloud_provider
-from .settings import get_setting
-from .credentials import resolve_credentials
 from .session import get_active_session
 from .cooldown import record_switch
 from .reset_helpers import add_24h_cooldown_for_email, sync_resets_with_cloud
-from .recommend import get_recommendation, Recommendation
+from .recommend import get_recommendation
 from .ui import cprint, NEON_YELLOW, NEON_RED, NEON_GREEN, NEON_CYAN
 
 LOCKFILE = os.path.join(GEMINI_CLI_HOME, ".backup.lock")

@@ -26,12 +26,9 @@ import shutil
 import subprocess
 import sys
 import time
-import tempfile
 from typing import Optional
 from .config import TIMESTAMPED_DIR_REGEX, DEFAULT_BACKUP_DIR, OLD_CONFIGS_DIR, GEMINI_CLI_HOME
 from .cloud_factory import get_cloud_provider
-from .settings import get_setting
-from .credentials import resolve_credentials
 
 LOCKFILE = os.path.join(GEMINI_CLI_HOME, ".backup.lock")
 

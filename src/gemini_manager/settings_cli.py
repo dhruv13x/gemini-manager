@@ -2,9 +2,7 @@
 # src/gemini_manager/settings_cli.py
 
 
-import argparse
 import sys
-import os
 from .settings import set_setting, get_setting, list_settings, remove_setting, CONFIG_FILE
 from .ui import cprint
 from .config import NEON_CYAN, NEON_GREEN, NEON_YELLOW, NEON_RED, RESET
@@ -76,7 +74,7 @@ def do_config(args):
                 # Non-interactive (Automation/Script) -> BLOCK
                 cprint(NEON_RED, "❌ Error: Refusing to write secrets in non-interactive mode.")
                 cprint(NEON_RED, "   Solution 1: Use Environment Variables (Recommended for CI/CD).")
-                cprint(NEON_RED, f"   Solution 2: Use --force to override.")
+                cprint(NEON_RED, "   Solution 2: Use --force to override.")
                 sys.exit(1)
         # --------------------
 
@@ -88,7 +86,7 @@ def do_config(args):
         if val is not None:
             cprint(NEON_GREEN, f"{val}")
         else:
-            cprint(NEON_YELLOW, f"(not set)")
+            cprint(NEON_YELLOW, "(not set)")
 
     elif action == "unset":
         if remove_setting(args.key):

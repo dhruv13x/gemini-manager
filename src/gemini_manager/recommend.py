@@ -1,8 +1,8 @@
 from enum import Enum, auto
 from dataclasses import dataclass
-from typing import Optional, Dict, List, Any
+from typing import Optional
 import datetime
-from .ui import console, cprint, NEON_GREEN, NEON_YELLOW, NEON_RED, NEON_CYAN
+from .ui import console, NEON_RED
 from .cooldown import get_cooldown_data, COOLDOWN_HOURS
 from .reset_helpers import get_all_resets
 

@@ -1,7 +1,7 @@
 import os
 import sys
 import requests
-from .ui import cprint, NEON_RED, NEON_YELLOW, NEON_GREEN
+from .ui import cprint, NEON_RED, NEON_YELLOW
 from .settings import get_setting
 
 def load_env_file(path):

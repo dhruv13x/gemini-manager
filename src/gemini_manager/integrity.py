@@ -14,7 +14,6 @@ from typing import Optional, Tuple
 from .config import TIMESTAMPED_DIR_REGEX, OLD_CONFIGS_DIR
 import subprocess
 
-from .config import TIMESTAMPED_DIR_REGEX
 
 def run(cmd: str, check: bool = True, capture: bool = False):
     if capture:

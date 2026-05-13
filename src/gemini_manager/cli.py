@@ -16,6 +16,7 @@ from .prune import do_prune
 from .update import do_update, do_check_update
 from .recommend import do_recommend
 from .stats import do_stats
+from .status import do_status
 from .reset_helpers import handle_resets_command
 from .profile import do_profile
 from .config import (
@@ -81,6 +82,8 @@ def main():
             do_cooldown_list(args)
     elif args.command == "recommend" or args.command == "next":
         do_recommend(args)
+    elif args.command == "status":
+        do_status(args)
     elif args.command == "stats" or args.command == "usage":
         do_stats(args)
     elif args.command == "resets":
