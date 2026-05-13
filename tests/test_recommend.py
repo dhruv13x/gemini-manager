@@ -204,8 +204,7 @@ def test_do_recommend_success(fs, capsys):
     rec.last_used = datetime.now(timezone.utc) - timedelta(days=2)
 
     # Patch colors to be valid rich styles or empty
-    with patch("gemini_manager.recommend.NEON_GREEN", "green"), \
-         patch("gemini_manager.recommend.NEON_RED", "red"), \
+    with patch("gemini_manager.recommend.NEON_RED", "red"), \
          patch("gemini_manager.recommend.get_recommendation", return_value=rec):
         do_recommend()
 
@@ -216,8 +215,7 @@ def test_do_recommend_success(fs, capsys):
 
 def test_do_recommend_none(fs, capsys):
     """Test CLI output when no recommendation found."""
-    with patch("gemini_manager.recommend.NEON_GREEN", "green"), \
-         patch("gemini_manager.recommend.NEON_RED", "red"), \
+    with patch("gemini_manager.recommend.NEON_RED", "red"), \
          patch("gemini_manager.recommend.get_recommendation", return_value=None):
         do_recommend()
 
@@ -230,11 +228,115 @@ def test_do_recommend_never_used(fs, capsys):
     rec.email = "fresh@test.com"
     rec.last_used = None
 
-    with patch("gemini_manager.recommend.NEON_GREEN", "green"), \
-         patch("gemini_manager.recommend.NEON_RED", "red"), \
+    with patch("gemini_manager.recommend.NEON_RED", "red"), \
          patch("gemini_manager.recommend.get_recommendation", return_value=rec):
         do_recommend()
 
     captured = capsys.readouterr()
     assert "fresh@test.com" in captured.out
     assert "Never / Unknown" in captured.out
+
+
+def test_get_recommendation_from_metadata(fs):
+    backup_dir = os.path.expanduser("~/.gemini-manager/backups")
+    fs.create_dir(backup_dir)
+    fs.create_file(
+        os.path.join(backup_dir, "2026-01-01_120000-meta@test.com.gemini-manager.metadata.json"),
+        contents=json.dumps({
+            "email": "meta@test.com",
+            "updated_at": "2026-01-01T00:00:00+00:00",
+            "next_available_at": "2020-01-01T00:00:00+00:00",
+            "models": {"Flash": {"percent": 42}},
+        }),
+    )
+
+    rec = get_recommendation()
+
+    assert rec.email == "meta@test.com"
+    assert rec.status == AccountStatus.READY
+    assert rec.quota_percent_left == 42
+    assert rec.flash_percent_left == 42
+    assert rec.source == "metadata"
+
+
+def test_get_recommendation_prioritizes_lowest_flash_quota(fs):
+    backup_dir = os.path.expanduser("~/.gemini-manager/backups")
+    fs.create_dir(backup_dir)
+    for email, flash_percent in [
+        ("zero@test.com", 0),
+        ("mid@test.com", 34),
+        ("high@test.com", 64),
+    ]:
+        fs.create_file(
+            os.path.join(backup_dir, f"2026-01-01_120000-{email}.gemini-manager.metadata.json"),
+            contents=json.dumps({
+                "email": email,
+                "updated_at": "2026-01-01T00:00:00+00:00",
+                "next_available_at": "2020-01-01T00:00:00+00:00",
+                "models": {
+                    "Flash": {"percent": flash_percent},
+                    "Pro": {"percent": 100},
+                },
+            }),
+        )
+
+    rec = get_recommendation()
+
+    assert rec.email == "zero@test.com"
+    assert rec.flash_percent_left == 0
+
+
+def test_get_recommendation_prioritizes_34_over_64_flash_when_no_zero(fs):
+    backup_dir = os.path.expanduser("~/.gemini-manager/backups")
+    fs.create_dir(backup_dir)
+    for email, flash_percent in [
+        ("mid@test.com", 34),
+        ("high@test.com", 64),
+    ]:
+        fs.create_file(
+            os.path.join(backup_dir, f"2026-01-01_120000-{email}.gemini-manager.metadata.json"),
+            contents=json.dumps({
+                "email": email,
+                "updated_at": "2026-01-01T00:00:00+00:00",
+                "next_available_at": "2020-01-01T00:00:00+00:00",
+                "models": {"Flash": {"percent": flash_percent}},
+            }),
+        )
+
+    rec = get_recommendation()
+
+    assert rec.email == "mid@test.com"
+    assert rec.flash_percent_left == 34
+
+
+def test_do_recommend_use_calls_restore(fs):
+    backup_dir = os.path.expanduser("~/.gemini-manager/backups")
+    fs.create_dir(backup_dir)
+    fs.create_file(
+        os.path.join(backup_dir, "2026-01-01_120000-meta@test.com.gemini-manager.metadata.json"),
+        contents=json.dumps({
+            "email": "meta@test.com",
+            "updated_at": "2026-01-01T00:00:00+00:00",
+            "next_available_at": "2020-01-01T00:00:00+00:00",
+            "models": {"Flash": {"percent": 42}},
+        }),
+    )
+    args = MagicMock()
+    args.cloud = False
+    args.use = True
+    args.restore = False
+    args.dest = os.path.expanduser("~/.gemini")
+    args.backup_dir = backup_dir
+    args.dry_run = True
+    args.force = False
+    args.bucket = None
+    args.b2_id = None
+    args.b2_key = None
+
+    with patch("gemini_manager.restore.perform_restore") as mock_restore:
+        do_recommend(args)
+
+    restore_args = mock_restore.call_args.args[0]
+    assert restore_args.email == "meta@test.com"
+    assert restore_args.auth_only is True
+    assert restore_args.full is False

@@ -9,7 +9,7 @@ from rich.align import Align
 from rich.text import Text
 from rich.table import Table
 
-from .config import RESET
+from .config import NEON_GREEN, NEON_CYAN, NEON_YELLOW, NEON_MAGENTA, NEON_RED, RESET
 
 # Export console for use in other modules
 console = Console()

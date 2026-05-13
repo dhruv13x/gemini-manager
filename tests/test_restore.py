@@ -76,7 +76,7 @@ def test_main_from_dir(mock_replace, mock_run, mock_lock, fs):
     mock_run.return_value.returncode = 0
 
     with patch("shutil.move"):
-        with patch("sys.argv", ["restore.py", "--from-dir", src_dir]):
+        with patch("sys.argv", ["restore.py", "--full", "--from-dir", src_dir]):
             restore.main()
 
     assert mock_run.call_count >= 1
@@ -92,7 +92,7 @@ def test_main_from_archive(mock_replace, mock_run, mock_lock, fs):
 
     mock_run.return_value.returncode = 0
 
-    with patch("sys.argv", ["restore.py", "--from-archive", archive]):
+    with patch("sys.argv", ["restore.py", "--full", "--from-archive", archive]):
         restore.main()
 
 @patch("gemini_manager.restore.acquire_lock")
@@ -106,7 +106,7 @@ def test_main_auto_oldest(mock_replace, mock_run, mock_find_oldest, mock_lock, f
 
     mock_run.return_value.returncode = 0
 
-    with patch("sys.argv", ["restore.py"]):
+    with patch("sys.argv", ["restore.py", "--full"]):
         restore.main()
         mock_find_oldest.assert_called()
 
@@ -119,7 +119,7 @@ def test_main_cloud(mock_replace, mock_sync, mock_run, mock_get_provider, mock_l
     dest_dir = os.path.expanduser("~/.gemini-manager")
     fs.create_dir(dest_dir)
 
-    with patch("sys.argv", ["restore.py", "--cloud", "--bucket", "b", "--b2-id", "i", "--b2-key", "k"]):
+    with patch("sys.argv", ["restore.py", "--full", "--cloud", "--bucket", "b", "--b2-id", "i", "--b2-key", "k"]):
         mock_file = MagicMock()
         mock_file.name = "2025-10-22_042211-test.gemini-manager.tar.gz"
         mock_get_provider.return_value.list_files.return_value = [mock_file]
@@ -142,7 +142,7 @@ def test_main_verification_fail(mock_run, mock_lock, fs):
     dest_dir = os.path.expanduser("~/.gemini-manager")
     fs.create_dir(dest_dir)
 
-    with patch("sys.argv", ["restore.py", "--from-archive", archive]):
+    with patch("sys.argv", ["restore.py", "--full", "--from-archive", archive]):
         mock_run.side_effect = [
             MagicMock(returncode=0),
             MagicMock(returncode=0),
@@ -161,7 +161,7 @@ def test_main_post_verification_fail(mock_replace, mock_run, mock_lock, fs):
     dest_dir = os.path.expanduser("~/.gemini-manager")
     fs.create_dir(dest_dir)
 
-    with patch("sys.argv", ["restore.py", "--from-archive", archive]):
+    with patch("sys.argv", ["restore.py", "--full", "--from-archive", archive]):
         mock_run.side_effect = [
             MagicMock(returncode=0),
             MagicMock(returncode=0),
@@ -178,14 +178,14 @@ def test_main_dry_run(mock_run, mock_lock, fs):
     fs.create_file("/tmp/archive.tar.gz")
     fs.create_dir(os.path.expanduser("~/.gemini-manager"))
 
-    with patch("sys.argv", ["restore.py", "--from-archive", "/tmp/archive.tar.gz", "--dry-run"]):
+    with patch("sys.argv", ["restore.py", "--full", "--from-archive", "/tmp/archive.tar.gz", "--dry-run"]):
         restore.main()
         mock_run.assert_not_called()
 
 @patch("gemini_manager.restore.acquire_lock")
 @patch("gemini_manager.restore.get_cloud_provider")
 def test_main_cloud_missing_creds(mock_get_provider, mock_lock, fs):
-    with patch("sys.argv", ["restore.py", "--cloud"]):
+    with patch("sys.argv", ["restore.py", "--full", "--cloud"]):
         mock_get_provider.return_value = None
         with pytest.raises(SystemExit):
             restore.main()
@@ -193,14 +193,14 @@ def test_main_cloud_missing_creds(mock_get_provider, mock_lock, fs):
 @patch("gemini_manager.restore.acquire_lock")
 @patch("gemini_manager.restore.get_cloud_provider")
 def test_main_cloud_no_backups(mock_get_provider, mock_lock, fs):
-    with patch("sys.argv", ["restore.py", "--cloud", "--bucket", "b", "--b2-id", "i", "--b2-key", "k"]):
+    with patch("sys.argv", ["restore.py", "--full", "--cloud", "--bucket", "b", "--b2-id", "i", "--b2-key", "k"]):
         mock_get_provider.return_value.list_files.return_value = []
         with pytest.raises(SystemExit):
             restore.main()
 
 @patch("gemini_manager.restore.acquire_lock")
 def test_main_from_dir_not_found(mock_lock, fs):
-    with patch("sys.argv", ["restore.py", "--from-dir", "/tmp/notfound"]):
+    with patch("sys.argv", ["restore.py", "--full", "--from-dir", "/tmp/notfound"]):
         with pytest.raises(SystemExit):
             restore.main()
 
@@ -215,12 +215,12 @@ def test_main_from_archive_search_dir(mock_replace, mock_lock, fs):
     with patch("gemini_manager.restore.run") as mock_run:
         mock_run.return_value.returncode = 0
 
-        with patch("sys.argv", ["restore.py", "--from-archive", "archive.tar.gz"]):
+        with patch("sys.argv", ["restore.py", "--full", "--from-archive", "archive.tar.gz"]):
              restore.main()
 
 @patch("gemini_manager.restore.acquire_lock")
 def test_main_from_archive_not_found(mock_lock, fs):
-    with patch("sys.argv", ["restore.py", "--from-archive", "archive.tar.gz"]):
+    with patch("sys.argv", ["restore.py", "--full", "--from-archive", "archive.tar.gz"]):
         with pytest.raises(SystemExit):
              restore.main()
 
@@ -228,7 +228,7 @@ def test_main_from_archive_not_found(mock_lock, fs):
 @patch("gemini_manager.restore.find_oldest_archive_backup", return_value=None)
 def test_main_auto_no_backups(mock_find, mock_lock, fs):
     fs.create_dir(os.path.expanduser("~/.gemini-manager"))
-    with patch("sys.argv", ["restore.py"]):
+    with patch("sys.argv", ["restore.py", "--full"]):
         with pytest.raises(SystemExit):
             restore.main()
 
@@ -240,7 +240,7 @@ def test_main_rollback_success(mock_replace, mock_run, mock_lock, fs):
      fs.create_file(archive)
      fs.create_dir(os.path.expanduser("~/.gemini-manager"))
 
-     with patch("sys.argv", ["restore.py", "--from-archive", archive]):
+     with patch("sys.argv", ["restore.py", "--full", "--from-archive", archive]):
         mock_run.side_effect = [
             MagicMock(returncode=0),
             MagicMock(returncode=0),
@@ -258,7 +258,7 @@ def test_main_rollback_fail(mock_run, mock_lock, fs):
      fs.create_file(archive)
      fs.create_dir(os.path.expanduser("~/.gemini-manager"))
 
-     with patch("sys.argv", ["restore.py", "--from-archive", archive]):
+     with patch("sys.argv", ["restore.py", "--full", "--from-archive", archive]):
         mock_run.side_effect = [MagicMock(returncode=0), MagicMock(returncode=0), MagicMock(returncode=0), MagicMock(returncode=1)]
 
         with patch("os.replace", side_effect=[None, None, OSError("Rollback Error")]) as mock_replace:
@@ -275,7 +275,7 @@ def test_main_cloud_specific_archive(mock_replace, mock_sync, mock_run, mock_get
     fs.create_dir(os.path.expanduser("~/.gemini-manager"))
     specific_archive = "2025-11-21_231311-specific@test.gemini-manager.tar.gz"
 
-    with patch("sys.argv", ["restore.py", "--cloud", "--bucket", "b", "--b2-id", "i", "--b2-key", "k", "--from-archive", specific_archive]):
+    with patch("sys.argv", ["restore.py", "--full", "--cloud", "--bucket", "b", "--b2-id", "i", "--b2-key", "k", "--from-archive", specific_archive]):
         mock_file_specific = MagicMock()
         mock_file_specific.name = specific_archive
         
@@ -305,7 +305,7 @@ def test_main_lock_exception(mock_replace, mock_lock, fs):
 
     with patch("gemini_manager.restore.find_oldest_archive_backup", return_value="/tmp/backup.tar.gz"):
         with patch("gemini_manager.restore.run", return_value=MagicMock(returncode=0)):
-             with patch("sys.argv", ["restore.py"]):
+             with patch("sys.argv", ["restore.py", "--full"]):
                  with patch("gemini_manager.restore.fcntl.flock") as mock_flock:
                      mock_flock.side_effect = [None, Exception("Unlock fail")]
                      restore.main()
@@ -321,7 +321,7 @@ def test_main_os_replace_fail_fallback(mock_run, mock_lock, fs):
 
     with patch("os.replace", side_effect=OSError(18, "Cross-device link")):
         with patch("shutil.move") as mock_move:
-            with patch("sys.argv", ["restore.py", "--from-archive", archive]):
+            with patch("sys.argv", ["restore.py", "--full", "--from-archive", archive]):
                 restore.main()
                 mock_move.assert_called()
 
@@ -336,7 +336,7 @@ def test_main_temp_extraction_rmtree_fail(mock_replace, mock_run, mock_lock, fs)
 
     # Mock shutil.rmtree to fail
     with patch("shutil.rmtree", side_effect=Exception("Perm error")):
-        with patch("sys.argv", ["restore.py", "--from-archive", archive]):
+        with patch("sys.argv", ["restore.py", "--full", "--from-archive", archive]):
             restore.main()
 
 @patch("gemini_manager.restore.acquire_lock")
@@ -349,7 +349,7 @@ def test_main_dest_not_exists(mock_replace, mock_run, mock_lock, fs):
 
     mock_run.return_value.returncode = 0
 
-    with patch("sys.argv", ["restore.py", "--from-archive", archive]):
+    with patch("sys.argv", ["restore.py", "--full", "--from-archive", archive]):
         restore.main()
         # Verify it created dest
         # Since we mocked os.replace, the actual move didn't happen, so dest isn't created by replace.
@@ -366,7 +366,7 @@ def test_main_tmp_dest_not_exists(mock_replace, mock_run, mock_lock, fs):
     fs.create_dir(os.path.expanduser("~/.gemini-manager"))
     mock_run.return_value.returncode = 0
 
-    with patch("sys.argv", ["restore.py", "--from-archive", archive]):
+    with patch("sys.argv", ["restore.py", "--full", "--from-archive", archive]):
         restore.main()
 
 @patch("gemini_manager.restore.acquire_lock")
@@ -379,14 +379,14 @@ def test_main_force_replace(mock_run, mock_lock, fs):
 
     with patch("shutil.rmtree") as mock_rmtree:
         with patch("os.replace"):
-            with patch("sys.argv", ["restore.py", "--from-archive", archive, "--force"]):
+            with patch("sys.argv", ["restore.py", "--full", "--from-archive", archive, "--force"]):
                 restore.main()
                 assert mock_rmtree.call_count >= 1
 
 @patch("gemini_manager.restore.acquire_lock")
 @patch("gemini_manager.restore.get_cloud_provider")
 def test_main_cloud_specific_archive_not_found(mock_get_provider, mock_lock, fs):
-    with patch("sys.argv", ["restore.py", "--cloud", "--bucket", "b", "--b2-id", "i", "--b2-key", "k", "--from-archive", "missing.tar.gz"]):
+    with patch("sys.argv", ["restore.py", "--full", "--cloud", "--bucket", "b", "--b2-id", "i", "--b2-key", "k", "--from-archive", "missing.tar.gz"]):
         mock_file = MagicMock()
         mock_file.name = "other.tar.gz"
         mock_get_provider.return_value.list_files.return_value = [mock_file]
@@ -402,7 +402,7 @@ def test_main_cleanup_temp_download(mock_replace, mock_sync, mock_run, mock_lock
     dest_dir = os.path.expanduser("~/.gemini-manager")
     fs.create_dir(dest_dir)
 
-    with patch("sys.argv", ["restore.py", "--cloud", "--bucket", "b", "--b2-id", "i", "--b2-key", "k"]):
+    with patch("sys.argv", ["restore.py", "--full", "--cloud", "--bucket", "b", "--b2-id", "i", "--b2-key", "k"]):
         with patch("gemini_manager.restore.get_cloud_provider") as mock_get_provider:
             mock_file = MagicMock()
             mock_file.name = "2025-10-22_042211-test.gemini-manager.tar.gz"
@@ -431,7 +431,7 @@ def test_main_verification_fail_with_stdout(mock_run, mock_lock, fs):
         MagicMock(returncode=0),
         MagicMock(returncode=1, stdout="diff output"),
     ]
-    with patch("sys.argv", ["restore.py", "--from-archive", archive]):
+    with patch("sys.argv", ["restore.py", "--full", "--from-archive", archive]):
         with pytest.raises(SystemExit) as e:
             restore.main()
         assert e.value.code == 3
@@ -449,7 +449,9 @@ def test_restore_auto_local_no_rec(fs, capsys):
         from_dir=None,
         from_archive=None,
         dry_run=False,
-        force=False
+        force=False,
+        full=True,
+        auth_only=False
     )
 
     with patch("gemini_manager.restore.get_recommendation", return_value=None):
@@ -470,7 +472,9 @@ def test_restore_auto_local_success(fs, capsys):
         from_dir=None,
         from_archive=None,
         dry_run=False,
-        force=False
+        force=False,
+        full=True,
+        auth_only=False
     )
 
     rec = Recommendation(email="test@example.com", status=AccountStatus.READY, last_used=None, next_reset=None)
@@ -501,7 +505,9 @@ def test_restore_auto_local_not_found(fs, capsys):
         from_dir=None,
         from_archive=None,
         dry_run=False,
-        force=False
+        force=False,
+        full=True,
+        auth_only=False
     )
 
     rec = Recommendation(email="test@example.com", status=AccountStatus.READY, last_used=None, next_reset=None)
@@ -522,6 +528,8 @@ def test_restore_cloud_auto_success(fs, capsys):
         from_archive=None,
         dry_run=False,
         force=False,
+        full=True,
+        auth_only=False,
         b2_id="id",
         b2_key="key",
         bucket="bucket"
@@ -529,9 +537,10 @@ def test_restore_cloud_auto_success(fs, capsys):
 
     rec = Recommendation(email="test@example.com", status=AccountStatus.READY, last_used=None, next_reset=None)
 
-    with patch("gemini_manager.restore.resolve_credentials", return_value=("id", "key", "bucket")):
-        with patch("gemini_manager.restore.get_cloud_provider") as MockProvider:
-            provider = MockProvider.return_value
+    # No need to patch resolve_credentials as it's not used in restore.py
+    with patch("gemini_manager.restore.get_cloud_provider") as mock_get_provider:
+
+            provider = mock_get_provider.return_value
             file_version = MagicMock()
             file_version.name = "2025-01-01_120000-test@example.com.gemini-manager.tar.gz"
             provider.list_files.return_value = [file_version]
@@ -558,14 +567,17 @@ def test_restore_cloud_auto_not_found(fs, capsys):
         from_dir=None,
         from_archive=None,
         dry_run=False,
-        force=False
+        force=False,
+        full=True,
+        auth_only=False
     )
 
     rec = Recommendation(email="test@example.com", status=AccountStatus.READY, last_used=None, next_reset=None)
 
-    with patch("gemini_manager.restore.resolve_credentials", return_value=("id", "key", "bucket")):
-        with patch("gemini_manager.restore.get_cloud_provider") as MockProvider:
-            provider = MockProvider.return_value
+    # No need to patch resolve_credentials as it's not used in restore.py
+    with patch("gemini_manager.restore.get_cloud_provider") as mock_get_provider:
+
+            provider = mock_get_provider.return_value
             file_version = MagicMock()
             file_version.name = "2025-01-01_120000-other@example.com.gemini-manager.tar.gz"
             provider.list_files.return_value = [file_version]
@@ -588,7 +600,9 @@ def test_restore_from_archive_search_fallback(fs, capsys):
         auto=False,
         from_dir=None,
         dry_run=False,
-        force=False
+        force=False,
+        full=True,
+        auth_only=False
     )
 
     with patch("gemini_manager.restore.acquire_lock"), \
@@ -611,7 +625,9 @@ def test_restore_from_archive_not_found_cli(fs, capsys):
         auto=False,
         from_dir=None,
         dry_run=False,
-        force=False
+        force=False,
+        full=True,
+        auth_only=False
     )
 
     with pytest.raises(SystemExit):
@@ -629,14 +645,17 @@ def test_restore_cloud_specific_success_cli(fs, capsys):
         from_dir=None,
         dry_run=False,
         force=False,
+        full=True,
+        auth_only=False,
         b2_id="id",
         b2_key="key",
         bucket="bucket"
     )
 
-    with patch("gemini_manager.restore.resolve_credentials", return_value=("id", "key", "bucket")):
-        with patch("gemini_manager.restore.get_cloud_provider") as MockProvider:
-            provider = MockProvider.return_value
+    # No need to patch resolve_credentials as it's not used in restore.py
+    with patch("gemini_manager.restore.get_cloud_provider") as mock_get_provider:
+
+            provider = mock_get_provider.return_value
             fv = MagicMock()
             fv.name = valid_name
             provider.list_files.return_value = [fv]
@@ -662,14 +681,17 @@ def test_restore_cloud_specific_fail_cli(fs, capsys):
         from_dir=None,
         dry_run=False,
         force=False,
+        full=True,
+        auth_only=False,
         b2_id="id",
         b2_key="key",
         bucket="bucket"
     )
 
-    with patch("gemini_manager.restore.resolve_credentials", return_value=("id", "key", "bucket")):
-        with patch("gemini_manager.restore.get_cloud_provider") as MockProvider:
-            provider = MockProvider.return_value
+    # No need to patch resolve_credentials as it's not used in restore.py
+    with patch("gemini_manager.restore.get_cloud_provider") as mock_get_provider:
+
+            provider = mock_get_provider.return_value
             fv = MagicMock()
             fv.name = "2025-01-01_120000-existing.gemini-manager.tar.gz"
             provider.list_files.return_value = [fv]
@@ -691,7 +713,9 @@ def test_restore_auto_cooldown_outgoing(fs, capsys):
         from_dir=None,
         from_archive="2025-01-01_120000-test@example.com.gemini-manager.tar.gz",
         dry_run=False,
-        force=False
+        force=False,
+        full=True,
+        auth_only=False
     )
 
     with patch("gemini_manager.restore.get_active_session", side_effect=["old@test.com", "new@test.com"]):
@@ -709,3 +733,119 @@ def test_restore_auto_cooldown_outgoing(fs, capsys):
              mock_cooldown.assert_called_with("old@test.com")
              mock_switch.assert_any_call("old@test.com", args=args)
              mock_switch.assert_any_call("new@test.com", args=args)
+
+
+def test_restore_defaults_to_auth_only_and_preserves_session_files(fs):
+    src_dir = "/tmp/backup_source"
+    dest_dir = os.path.expanduser("~/.gemini")
+    fs.create_dir(src_dir)
+    fs.create_file(os.path.join(src_dir, "google_accounts.json"), contents='{"active":"new@example.com"}')
+    fs.create_file(os.path.join(src_dir, "oauth_creds.json"), contents='{"refresh_token":"new"}')
+    fs.create_file(os.path.join(src_dir, "installation_id"), contents="new-install")
+    fs.create_file(os.path.join(src_dir, "settings.json"), contents='{"security":{"auth":"oauth"}}')
+    fs.create_file(os.path.join(src_dir, "state.json"), contents='{"from":"backup"}')
+
+    fs.create_dir(os.path.join(dest_dir, "tmp", "bot-platform", "chats"))
+    fs.create_file(
+        os.path.join(dest_dir, "tmp", "bot-platform", "chats", "session-current.jsonl"),
+        contents='{"current":true}\n',
+    )
+    fs.create_file(os.path.join(dest_dir, "state.json"), contents='{"current":true}')
+
+    args = argparse.Namespace(
+        cloud=False,
+        auto=False,
+        email=None,
+        dest=dest_dir,
+        search_dir="~/gm/backups",
+        from_dir=src_dir,
+        from_archive=None,
+        dry_run=False,
+        force=False,
+        full=False,
+        auth_only=False,
+    )
+
+    with patch("gemini_manager.restore.acquire_lock"), \
+         patch("gemini_manager.restore.get_active_session", return_value=None):
+        perform_restore(args)
+
+    assert open(os.path.join(dest_dir, "google_accounts.json")).read() == '{"active":"new@example.com"}'
+    assert open(os.path.join(dest_dir, "oauth_creds.json")).read() == '{"refresh_token":"new"}'
+    assert open(os.path.join(dest_dir, "installation_id")).read() == "new-install"
+    assert open(os.path.join(dest_dir, "settings.json")).read() == '{"security":{"auth":"oauth"}}'
+    assert open(os.path.join(dest_dir, "state.json")).read() == '{"current":true}'
+    assert os.path.exists(os.path.join(dest_dir, "tmp", "bot-platform", "chats", "session-current.jsonl"))
+
+
+def test_restore_email_selects_latest_local_backup(fs):
+    search_dir = os.path.expanduser("~/gm/backups")
+    fs.create_dir(search_dir)
+    latest = os.path.join(search_dir, "2025-01-02_120000-test@example.com.gemini-manager.tar.gz")
+    old = os.path.join(search_dir, "2025-01-01_120000-test@example.com.gemini-manager.tar.gz")
+    fs.create_file(latest)
+    fs.create_file(old)
+
+    args = argparse.Namespace(
+        cloud=False,
+        auto=False,
+        email="test@example.com",
+        dest=os.path.expanduser("~/.gemini"),
+        search_dir="~/gm/backups",
+        from_dir=None,
+        from_archive=None,
+        dry_run=False,
+        force=False,
+        full=False,
+        auth_only=False,
+    )
+
+    with patch("gemini_manager.restore.acquire_lock"), \
+         patch("gemini_manager.restore.extract_archive") as mock_extract, \
+         patch("gemini_manager.restore._copy_auth_only_files", return_value=["google_accounts.json"]), \
+         patch("gemini_manager.restore.get_active_session", return_value=None):
+        perform_restore(args)
+
+    mock_extract.assert_called_once_with(latest, ANY)
+
+
+def test_restore_cloud_email_selects_latest_backup(fs):
+    dest_dir = os.path.expanduser("~/.gemini")
+    fs.create_dir(dest_dir)
+
+    args = argparse.Namespace(
+        cloud=True,
+        auto=False,
+        email="test@example.com",
+        dest=dest_dir,
+        search_dir="~/gm/backups",
+        from_dir=None,
+        from_archive=None,
+        dry_run=False,
+        force=False,
+        full=False,
+        auth_only=False,
+        b2_id="id",
+        b2_key="key",
+        bucket="bucket",
+    )
+
+    latest_name = "2025-01-02_120000-test@example.com.gemini-manager.tar.gz"
+    old_name = "2025-01-01_120000-test@example.com.gemini-manager.tar.gz"
+
+    with patch("gemini_manager.restore.get_cloud_provider") as mock_get_provider:
+        provider = mock_get_provider.return_value
+        latest_file = MagicMock()
+        latest_file.name = latest_name
+        old_file = MagicMock()
+        old_file.name = old_name
+        provider.list_files.return_value = [old_file, latest_file]
+
+        with patch("gemini_manager.restore.acquire_lock"), \
+             patch("gemini_manager.restore.extract_archive"), \
+             patch("gemini_manager.restore._copy_auth_only_files", return_value=["google_accounts.json"]), \
+             patch("gemini_manager.restore.get_active_session", return_value=None), \
+             patch("os.remove"):
+            perform_restore(args)
+
+    provider.download_file.assert_called_once_with(latest_name, ANY)

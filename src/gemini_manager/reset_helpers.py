@@ -24,6 +24,7 @@ from typing import Tuple, Optional, List, Dict, Any
 import json
 import os
 import re
+import sys
 import uuid
 import subprocess
 
@@ -409,7 +410,6 @@ def do_capture_reset(pasted_text: str = None):
         text = pasted_text
     else:
         # try reading from stdin if piped
-        import sys
         if not sys.stdin.isatty():
             text = sys.stdin.read()
         else:
@@ -520,6 +520,56 @@ def add_24h_cooldown_for_email(email: str) -> Dict[str, Any]:
     
     _save_store(entries)
     cprint(NEON_GREEN, f"[INFO] Started 24h cooldown for {email} (until {reset_dt.strftime('%d %b %I:%M %p')})")
+    return entry
+
+def save_live_status_to_resets(status: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """
+    Saves a live status dict (from get_live_status) to the resets store.
+    """
+    email = status.get("email")
+    if not email:
+        return None
+
+    now = _now_local()
+    
+    # Prioritize 'Flash' for the main reset_ist, fallback to max of others
+    target_timedelta = None
+    models = status.get("models", {})
+    
+    if "Flash" in models:
+        m_info = models["Flash"]
+        h, m = m_info.get("reset_h"), m_info.get("reset_m")
+        if h is not None and m is not None:
+            target_timedelta = timedelta(hours=h, minutes=m)
+    
+    if target_timedelta is None:
+        # Fallback to max of any available model
+        for m_data in models.values():
+            h, m = m_data.get("reset_h"), m_data.get("reset_m")
+            if h is not None and m is not None:
+                td = timedelta(hours=h, minutes=m)
+                if target_timedelta is None or td > target_timedelta:
+                    target_timedelta = td
+
+    if target_timedelta is None:
+        return None
+
+    reset_dt = now + target_timedelta
+    
+    entry = {
+        "id": str(uuid.uuid4())[:8],
+        "email": email,
+        "saved_string": "Live status capture",
+        "reset_ist": reset_dt.isoformat(),
+        "saved_at": now.isoformat(),
+        "models": status.get("models", {})  # Store full model status
+    }
+    
+    entries = _load_store()
+    # Replace existing for this email
+    entries = [e for e in entries if e.get("email") != email]
+    entries.append(entry)
+    _save_store(entries)
     return entry
 
 def merge_resets(local: List[Dict], remote: List[Dict]) -> List[Dict]:

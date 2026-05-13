@@ -8,7 +8,8 @@ from rich.panel import Panel
 from .ui import console, print_rich_help
 from .config import (
     DEFAULT_BACKUP_DIR,
-    OLD_CONFIGS_DIR
+    OLD_CONFIGS_DIR,
+    DEFAULT_GEMINI_HOME
 )
 from .project_config import load_project_config, normalize_config_keys
 
@@ -114,10 +115,14 @@ def get_parser() -> argparse.ArgumentParser:
     restore_parser = subparsers.add_parser("restore", help="Restore Gemini configuration from a backup (local or Backblaze B2 cloud).")
     restore_parser.add_argument("--from-dir", help="Directory backup to restore from (preferred)")
     restore_parser.add_argument("--from-archive", help="Tar.gz archive to restore from")
+    restore_parser.add_argument("--email", help="Restore the latest backup for this email")
     restore_parser.add_argument("--search-dir", default=DEFAULT_BACKUP_DIR, help="Directory to search for backup archives (*.gemini-manager.tar.gz) when no --from-dir (default: ~/.gemini-manager/backups)")
-    restore_parser.add_argument("--dest", default="~/.gemini-manager", help="Destination (default ~/.gemini-manager)")
+    restore_parser.add_argument("--dest", default=DEFAULT_GEMINI_HOME, help=f"Destination (default {DEFAULT_GEMINI_HOME})")
     restore_parser.add_argument("--force", action="store_true", help="Allow destructive replace without keeping .bak")
     restore_parser.add_argument("--dry-run", action="store_true", help="Do a dry run without destructive actions")
+    restore_mode = restore_parser.add_mutually_exclusive_group()
+    restore_mode.add_argument("--auth-only", action="store_true", help="Restore only Gemini identity files and preserve current sessions (default)")
+    restore_mode.add_argument("--full", action="store_true", help="Replace the whole Gemini state directory")
     restore_parser.add_argument("--cloud", action="store_true", help="Restore from Cloud (B2)")
     restore_parser.add_argument("--bucket", help="B2 Bucket Name")
     restore_parser.add_argument("--b2-id", help="B2 Key ID")
@@ -142,6 +147,8 @@ def get_parser() -> argparse.ArgumentParser:
     # List backups command
     list_backups_parser = subparsers.add_parser("list-backups", help="List available backups (local or Backblaze B2 cloud).")
     list_backups_parser.add_argument("--search-dir", default=DEFAULT_BACKUP_DIR, help="Directory to search for backup archives (default: ~/.gemini-manager/backups)")
+    list_backups_parser.add_argument("--all", action="store_true", help="Show every archive instead of only the latest backup per email")
+    list_backups_parser.add_argument("--show-dirs", action="store_true", help="Also show legacy directory backups from ~/.gemini-manager-old")
     list_backups_parser.add_argument("--cloud", action="store_true", help="List backups from Cloud (B2)")
     list_backups_parser.add_argument("--bucket", help="B2 Bucket Name")
     list_backups_parser.add_argument("--b2-id", help="B2 Key ID")
@@ -211,7 +218,16 @@ def get_parser() -> argparse.ArgumentParser:
 
     # Recommend command
     recommend_parser = subparsers.add_parser("recommend", aliases=["next"], help="Suggest the next best account (Green & Least Recently Used).")
-    # No arguments needed for now, but could add specific filters later.
+    recommend_parser.add_argument("--backup-dir", default=DEFAULT_BACKUP_DIR, help="Directory containing backup archives and metadata")
+    recommend_parser.add_argument("--cloud", action="store_true", help="Recommend from Cloud metadata")
+    recommend_parser.add_argument("--use", action="store_true", help="Immediately switch to the recommended account (auth-only)")
+    recommend_parser.add_argument("--restore", action="store_true", help="Immediately full-restore the recommended account")
+    recommend_parser.add_argument("--dest", default=DEFAULT_GEMINI_HOME, help=f"Gemini home directory to restore into (default {DEFAULT_GEMINI_HOME})")
+    recommend_parser.add_argument("--dry-run", action="store_true", help="Show what would happen without switching")
+    recommend_parser.add_argument("--force", action="store_true", help="Allow destructive replacement for --restore")
+    recommend_parser.add_argument("--bucket", help="B2 Bucket Name")
+    recommend_parser.add_argument("--b2-id", help="B2 Key ID")
+    recommend_parser.add_argument("--b2-key", help="B2 App Key")
 
     # Stats command
     stats_parser = subparsers.add_parser("stats", aliases=["usage"], help="Show usage statistics (last 7 days).")
@@ -228,5 +244,12 @@ def get_parser() -> argparse.ArgumentParser:
     profile_import = profile_subparsers.add_parser("import", help="Import profile from a zip file.")
     profile_import.add_argument("file", help="Input zip filename")
     profile_import.add_argument("--force", action="store_true", help="Overwrite existing files without confirmation")
+
+    # Status command
+    status_parser = subparsers.add_parser("status", help="Show current Gemini status (live capture).")
+    status_parser.add_argument("--cloud", action="store_true", help="Sync status with the cloud.")
+    status_parser.add_argument("--bucket", help="B2 Bucket Name")
+    status_parser.add_argument("--b2-id", help="B2 Key ID")
+    status_parser.add_argument("--b2-key", help="B2 App Key")
 
     return parser

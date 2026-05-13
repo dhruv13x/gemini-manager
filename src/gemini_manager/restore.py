@@ -29,7 +29,7 @@ import sys
 import tempfile
 import time
 from typing import Optional, Tuple
-from .config import DEFAULT_BACKUP_DIR, NEON_GREEN, NEON_RED, NEON_YELLOW, NEON_CYAN, TIMESTAMPED_DIR_REGEX, OLD_CONFIGS_DIR, GEMINI_CLI_HOME
+from .config import DEFAULT_BACKUP_DIR, NEON_GREEN, NEON_RED, NEON_YELLOW, NEON_CYAN, TIMESTAMPED_DIR_REGEX, OLD_CONFIGS_DIR, GEMINI_CLI_HOME, DEFAULT_GEMINI_HOME
 from .cloud_factory import get_cloud_provider
 from .session import get_active_session
 from .cooldown import record_switch
@@ -38,6 +38,12 @@ from .recommend import get_recommendation
 from .ui import cprint, NEON_YELLOW, NEON_RED, NEON_GREEN, NEON_CYAN
 
 LOCKFILE = os.path.join(GEMINI_CLI_HOME, ".backup.lock")
+AUTH_ONLY_INCLUDES = {
+    "google_accounts.json",
+    "oauth_creds.json",
+    "installation_id",
+    "settings.json",
+}
 
 def acquire_lock(path: str = LOCKFILE):
     # Ensure the directory for the lockfile exists
@@ -73,23 +79,25 @@ def parse_timestamp_from_name(name: str) -> Optional[time.struct_time]:
         return None
 
 def is_backup_archive(filename: str) -> bool:
+    """
+    Check if a filename follows the Gemini Manager backup archive naming convention.
+    Matches *.gemini-manager.tar.gz or *.gemini-manager.tar.gz.gpg.
+    """
     return filename.endswith(".gemini-manager.tar.gz") or filename.endswith(".gemini-manager.tar.gz.gpg")
 
 def find_oldest_archive_backup(search_dir: str) -> Optional[str]:
     """
-    Search search_dir for backup archives (*.gemini-manager.tar.gz or *.gpg) matching the
-    timestamp pattern and return the full path of the oldest backup (earliest
-    timestamp). If none found, return None.
+    Search search_dir for backup archives matching the timestamp pattern
+    and return the full path of the oldest backup (earliest timestamp).
+    Pattern: YYYY-MM-DD_HHMMSS-*.gemini-manager.tar.gz
     """
     candidates: list[Tuple[time.struct_time, str]] = []
     try:
         for entry in os.listdir(search_dir):
             full_path = os.path.join(search_dir, entry)
-            # We are now looking for archive files, not directories
             if not (os.path.isfile(full_path) and is_backup_archive(entry)):
                 continue
 
-            # The name for parsing is the filename itself
             ts = parse_timestamp_from_name(entry)
             if ts:
                 candidates.append((ts, full_path))
@@ -106,8 +114,10 @@ def find_oldest_archive_backup(search_dir: str) -> Optional[str]:
 
 def find_latest_archive_backup_for_email(search_dir: str, email: str) -> Optional[str]:
     """
-    Search search_dir for backup archives matching the
-    timestamp pattern AND the email. Returns the LATEST (newest) backup.
+    Search search_dir for backup archives matching the timestamp pattern AND the email.
+    Returns the LATEST (newest) backup.
+    
+    Format example: 2026-05-13_120000-user@example.com.gemini-manager.tar.gz
     """
     candidates: list[Tuple[time.struct_time, str]] = []
     try:
@@ -116,10 +126,7 @@ def find_latest_archive_backup_for_email(search_dir: str, email: str) -> Optiona
             if not (os.path.isfile(full_path) and is_backup_archive(entry)):
                 continue
 
-            # Robust matching: Parse filename to extract email
-            # Format: YYYY-MM-DD_HHMMSS-<email>.gemini-manager.tar.gz[.gpg]
-
-            # Extract suffix after first 18 chars (timestamp + hyphen)
+            # Extract suffix after timestamp (first 18 chars: YYYY-MM-DD_HHMMSS-)
             if len(entry) <= 18:
                 continue
 
@@ -148,6 +155,84 @@ def find_latest_archive_backup_for_email(search_dir: str, email: str) -> Optiona
     # Sort by timestamp struct_time DESCENDING (latest first)
     candidates.sort(key=lambda x: time.mktime(x[0]), reverse=True)
     return candidates[0][1]
+
+
+def _email_from_archive_name(filename: str) -> Optional[str]:
+    """
+    Extract email from backup archive filename.
+    Matches logic in list_backups.py.
+    """
+    if len(filename) <= 18:
+        return None
+
+    suffix = filename[18:]
+    if suffix.endswith(".gemini-manager.tar.gz"):
+        return suffix[:-22]
+    if suffix.endswith(".gemini-manager.tar.gz.gpg"):
+        return suffix[:-26]
+    return None
+
+
+def _latest_cloud_backup_for_email(all_files, email: str) -> Optional[str]:
+    candidates = [
+        (ts, fname)
+        for ts, fname in all_files
+        if _email_from_archive_name(fname) == email
+    ]
+    if not candidates:
+        return None
+    candidates.sort(key=lambda x: time.mktime(x[0]), reverse=True)
+    return candidates[0][1]
+
+
+def _copy_auth_only_files(src_for_copy: str, dest: str, dry_run: bool) -> list[str]:
+    copied = []
+    os.makedirs(dest, exist_ok=True)
+
+    for name in sorted(AUTH_ONLY_INCLUDES):
+        src_path = os.path.join(src_for_copy, name)
+        dest_path = os.path.join(dest, name)
+        if not os.path.exists(src_path):
+            continue
+
+        copied.append(name)
+        if dry_run:
+            cprint(NEON_YELLOW, f"[DRY-RUN] Would restore identity file: {name}")
+            continue
+
+        if os.path.isdir(src_path) and not os.path.islink(src_path):
+            if os.path.exists(dest_path):
+                shutil.rmtree(dest_path)
+            shutil.copytree(src_path, dest_path)
+        else:
+            shutil.copy2(src_path, dest_path)
+
+    return copied
+
+
+def _backup_current_auth_files(dest: str, ts_now: str, dry_run: bool) -> Optional[str]:
+    existing = [
+        name
+        for name in sorted(AUTH_ONLY_INCLUDES)
+        if os.path.exists(os.path.join(dest, name))
+    ]
+    if not existing:
+        return None
+
+    backup_dir = os.path.join(OLD_CONFIGS_DIR, f".gemini-auth.bak-{ts_now}")
+    if dry_run:
+        cprint(NEON_YELLOW, f"[DRY-RUN] Would back up current identity files to {backup_dir}")
+        return backup_dir
+
+    os.makedirs(backup_dir, exist_ok=True)
+    for name in existing:
+        src_path = os.path.join(dest, name)
+        dest_path = os.path.join(backup_dir, name)
+        if os.path.isdir(src_path) and not os.path.islink(src_path):
+            shutil.copytree(src_path, dest_path)
+        else:
+            shutil.copy2(src_path, dest_path)
+    return backup_dir
 
 
 def extract_archive(archive_path: str, extract_to: str):
@@ -199,13 +284,38 @@ def extract_archive(archive_path: str, extract_to: str):
 def perform_restore(args: argparse.Namespace):
     email_before = get_active_session()
     
+    # --- Auto-Status Capture for Outgoing Account ---
+    # Capture current state BEFORE we wipe ~/.gemini with the restore
+    if not getattr(args, 'dry_run', False) and email_before:
+        try:
+            from .status import do_status
+            cprint(NEON_CYAN, f"Capturing final status for outgoing account: {email_before}...")
+            # We call do_status with cloud=True if the restore is cloud-based
+            # to ensure the outgoing account's quota is synced everywhere.
+            status_args = argparse.Namespace(cloud=getattr(args, 'cloud', False))
+            # Merge B2 credentials if provided to restore
+            for attr in ['bucket', 'b2_id', 'b2_key']:
+                setattr(status_args, attr, getattr(args, attr, None))
+            
+            do_status(status_args)
+            cprint(NEON_GREEN, "[OK] Final status captured and synced.")
+        except Exception as e:
+            cprint(NEON_YELLOW, f"[WARN] Failed to capture final status: {e}")
+            cprint(NEON_YELLOW, "[HINT] Cooldown dashboard might be slightly out-of-date for this account.")
+    # -----------------------------------------------
+
     # Check for required args if not set (legacy check)
     if not hasattr(args, 'dest') or args.dest is None:
-        args.dest = "~/.gemini-manager"
+        args.dest = DEFAULT_GEMINI_HOME
 
     # Handle search_dir default if missing
     if not hasattr(args, 'search_dir') or args.search_dir is None:
         args.search_dir = DEFAULT_BACKUP_DIR
+
+    auth_only = not getattr(args, 'full', False)
+    if getattr(args, 'auth_only', False) and getattr(args, 'full', False):
+        cprint(NEON_RED, "Choose either --auth-only or --full, not both.")
+        sys.exit(1)
 
     dest = os.path.abspath(os.path.expanduser(args.dest))
     ts_now = time.strftime("%Y%m%d-%H%M%S")
@@ -236,7 +346,15 @@ def perform_restore(args: argparse.Namespace):
 
         target_file_name = None
 
-        if hasattr(args, 'auto') and args.auto:
+        if getattr(args, 'email', None):
+            target_email = args.email
+            target_file_name = _latest_cloud_backup_for_email(all_files, target_email)
+            if not target_file_name:
+                cprint(NEON_RED, f"No backups found in cloud for account: {target_email}")
+                sys.exit(1)
+            cprint(NEON_GREEN, f"Selected latest cloud backup for {target_email}: {target_file_name}")
+
+        elif hasattr(args, 'auto') and args.auto:
             rec = get_recommendation()
             if not rec:
                 cprint(NEON_RED, "No 'Green' (Ready) accounts available for auto-switch.")
@@ -245,19 +363,11 @@ def perform_restore(args: argparse.Namespace):
             target_email = rec.email
             cprint(NEON_CYAN, f"Auto-switch recommendation: {target_email}")
 
-            # Filter files for this email
-            candidates = []
-            for ts, fname in all_files:
-                if target_email in fname:
-                    candidates.append((ts, fname))
-
-            if not candidates:
+            target_file_name = _latest_cloud_backup_for_email(all_files, target_email)
+            if not target_file_name:
                 cprint(NEON_RED, f"No backups found in cloud for recommended account: {target_email}")
                 sys.exit(1)
 
-            # Select LATEST (newest) for auto-switch
-            candidates.sort(key=lambda x: time.mktime(x[0]), reverse=True)
-            target_file_name = candidates[0][1]
             cprint(NEON_GREEN, f"Selected latest cloud backup for {target_email}: {target_file_name}")
 
         elif hasattr(args, 'from_archive') and args.from_archive:
@@ -293,6 +403,18 @@ def perform_restore(args: argparse.Namespace):
         
         from_archive = temp_download_path
     # ---------------------------------------
+
+    elif getattr(args, 'email', None):
+        target_email = args.email
+        sd = os.path.abspath(os.path.expanduser(args.search_dir))
+        latest_archive = find_latest_archive_backup_for_email(sd, target_email)
+
+        if not latest_archive:
+            cprint(NEON_RED, f"No backups found locally for account: {target_email}")
+            sys.exit(1)
+
+        from_archive = latest_archive
+        cprint(NEON_GREEN, f"Selected latest local backup for {target_email}: {from_archive}")
 
     elif hasattr(args, 'auto') and args.auto:
         rec = get_recommendation()
@@ -364,81 +486,114 @@ def perform_restore(args: argparse.Namespace):
                 src_for_copy = os.path.abspath(chosen_src)
                 print("Source to restore from:", src_for_copy)
 
-            # Copy into temporary dest - to prepare verification
-            tmp_dest = f"{dest}.tmp-{ts_now}"
-            print(f"Copying {src_for_copy} -> {tmp_dest}")
-            if not getattr(args, 'dry_run', False):
-                if os.path.exists(tmp_dest):
-                    shutil.rmtree(tmp_dest)
-                cp_cmd = f"cp -a {shlex_quote(src_for_copy)} {shlex_quote(tmp_dest)}"
-                run(cp_cmd)
+            if auth_only:
+                cprint(NEON_CYAN, "Restore mode: auth-only (preserving current sessions, history, and project state)")
+                backup_dir = _backup_current_auth_files(dest, ts_now, getattr(args, 'dry_run', False))
+                copied = _copy_auth_only_files(src_for_copy, dest, getattr(args, 'dry_run', False))
+                if not copied:
+                    cprint(NEON_RED, "No Gemini identity files found in selected backup.")
+                    sys.exit(5)
+                cprint(NEON_GREEN, f"Auth-only restore complete. Restored: {', '.join(copied)}")
+                if backup_dir:
+                    print("Previous identity files copied to:", backup_dir)
             else:
-                print("DRY RUN: would cp -a ...")
+                cprint(NEON_CYAN, "Restore mode: full state (replacing current ~/.gemini)")
+
+            # Copy into temporary dest - to prepare verification
+            if not auth_only:
+                tmp_dest = f"{dest}.tmp-{ts_now}"
+                print(f"Copying {src_for_copy} -> {tmp_dest}")
+                if not getattr(args, 'dry_run', False):
+                    if os.path.exists(tmp_dest):
+                        shutil.rmtree(tmp_dest)
+                    cp_cmd = f"cp -a {shlex_quote(src_for_copy)} {shlex_quote(tmp_dest)}"
+                    run(cp_cmd)
+                else:
+                    print("DRY RUN: would cp -a ...")
 
             # Verify copy with diff -r
-            print("Verifying copy with diff -r")
-            if not getattr(args, 'dry_run', False):
-                diff_proc = run(f"diff -r {shlex_quote(tmp_dest)} {shlex_quote(src_for_copy)}", capture=True, check=False)
-                if diff_proc.returncode != 0:
-                    print("Verification FAILED (diff shows differences):")
-                    if diff_proc.stdout:
-                        print(diff_proc.stdout)
-                    shutil.rmtree(tmp_dest, ignore_errors=True)
-                    sys.exit(3)
+            if not auth_only:
+                print("Verifying copy with diff -r")
+                if not getattr(args, 'dry_run', False):
+                    diff_proc = run(f"diff -r {shlex_quote(tmp_dest)} {shlex_quote(src_for_copy)}", capture=True, check=False)
+                    if diff_proc.returncode != 0:
+                        print("Verification FAILED (diff shows differences):")
+                        if diff_proc.stdout:
+                            print(diff_proc.stdout)
+                        shutil.rmtree(tmp_dest, ignore_errors=True)
+                        sys.exit(3)
+                    else:
+                        print("Verification OK.")
                 else:
-                    print("Verification OK.")
-            else:
-                print("DRY RUN: would run diff -r ...")
+                    print("DRY RUN: would run diff -r ...")
 
             # Prepare swap: move existing dest to archive unless --force
             bakname = None
-            if os.path.exists(dest) and not args.force:
-                bak_filename = f".gemini-manager.bak-{ts_now}"
-                bakname = os.path.join(OLD_CONFIGS_DIR, bak_filename)
-                
-                if args.dry_run:
-                    cprint(NEON_YELLOW, f"[DRY-RUN] Would move existing {dest} to {bakname}")
+            if not auth_only and os.path.exists(dest):
+                if not args.force:
+                    bak_filename = f".gemini-manager.bak-{ts_now}"
+                    bakname = os.path.join(OLD_CONFIGS_DIR, bak_filename)
+                    
+                    if args.dry_run:
+                        cprint(NEON_YELLOW, f"[DRY-RUN] Would move existing {dest} to {bakname}")
+                    else:
+                        cprint(NEON_YELLOW, f"Backing up existing configuration to {bakname}...")
+                        # If destination archive exists (highly unlikely with timestamp), remove it first or it will fail/nest
+                        if os.path.exists(bakname):
+                             shutil.rmtree(bakname)
+                        shutil.move(dest, bakname)
                 else:
-                    cprint(NEON_YELLOW, f"Backing up existing configuration to {bakname}...")
-                    # If destination archive exists (highly unlikely with timestamp), remove it first or it will fail/nest
-                    if os.path.exists(bakname):
-                         shutil.rmtree(bakname)
-                    shutil.move(dest, bakname)
+                    if args.dry_run:
+                        cprint(NEON_YELLOW, f"[DRY-RUN] Would remove existing {dest} (--force)")
+                    else:
+                        cprint(NEON_YELLOW, f"Removing existing configuration (--force): {dest}")
+                        if os.path.isdir(dest) and not os.path.islink(dest):
+                            shutil.rmtree(dest)
+                        else:
+                            os.remove(dest)
 
             # Install new .gm (atomic replace)
-            print(f"Installing new .gm from {tmp_dest} -> {dest}")
-            if not getattr(args, 'dry_run', False):
-                try:
-                    os.replace(tmp_dest, dest)
-                except OSError as e:
-                     # Fallback for cross-device link if using tmp in different mount
-                     if e.errno == 18: # EXDEV
-                         shutil.move(tmp_dest, dest)
-                     else:
-                         raise e
-            else:
-                print("DRY RUN: would os.replace(tmp_dest, dest)")
+            if not auth_only:
+                print(f"Installing new .gm from {tmp_dest} -> {dest}")
+                if not getattr(args, 'dry_run', False):
+                    try:
+                        os.replace(tmp_dest, dest)
+                    except OSError as e:
+                         # Fallback for cross-device link OR non-empty directory conflict
+                         # ENOTEMPTY (39) or EEXIST (17) or EBUSY (16)
+                         if e.errno in [16, 17, 18, 39]:
+                             if os.path.exists(dest):
+                                 if os.path.isdir(dest) and not os.path.islink(dest):
+                                     shutil.rmtree(dest)
+                                 else:
+                                     os.remove(dest)
+                             shutil.move(tmp_dest, dest)
+                         else:
+                             raise e
+                else:
+                    print("DRY RUN: would os.replace(tmp_dest, dest)")
 
             # Post-restore verification
-            if not getattr(args, 'dry_run', False):
-                print("Post-restore verification: diff -r between restored dest and source")
-                diff2 = run(f"diff -r {shlex_quote(dest)} {shlex_quote(src_for_copy)}", capture=True, check=False)
-                if diff2.returncode != 0:
-                    print("Post-restore verification FAILED:")
-                    if diff2.stdout:
-                        print(diff2.stdout)
-                    print("Attempting rollback (if possible).")
-                    if not getattr(args, 'force', False) and bakname and os.path.exists(bakname):
-                        try:
-                            os.replace(bakname, dest)
-                            print("Rollback to previous copy succeeded.")
-                        except Exception as e:
-                            print("Rollback failed:", e)
-                    sys.exit(4)
+            if not auth_only:
+                if not getattr(args, 'dry_run', False):
+                    print("Post-restore verification: diff -r between restored dest and source")
+                    diff2 = run(f"diff -r {shlex_quote(dest)} {shlex_quote(src_for_copy)}", capture=True, check=False)
+                    if diff2.returncode != 0:
+                        print("Post-restore verification FAILED:")
+                        if diff2.stdout:
+                            print(diff2.stdout)
+                        print("Attempting rollback (if possible).")
+                        if not getattr(args, 'force', False) and bakname and os.path.exists(bakname):
+                            try:
+                                os.replace(bakname, dest)
+                                print("Rollback to previous copy succeeded.")
+                            except Exception as e:
+                                print("Rollback failed:", e)
+                        sys.exit(4)
+                    else:
+                        print("Post-restore verification OK.")
                 else:
-                    print("Post-restore verification OK.")
-            else:
-                print("DRY RUN: would run post-restore diff")
+                    print("DRY RUN: would run post-restore diff")
 
             print("Restore complete.")
             if bakname and os.path.exists(bakname):
@@ -513,10 +668,14 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--from-dir", help="Directory backup to restore from (legacy, archive is preferred)")
     p.add_argument("--from-archive", help="Tar.gz archive to restore from")
+    p.add_argument("--email", help="Restore the latest backup for this email")
     p.add_argument("--search-dir", default=DEFAULT_BACKUP_DIR, help="Directory to search for timestamped backups when no source is specified (default: ~/.gemini-manager/backups)")
-    p.add_argument("--dest", default="~/.gemini-manager", help="Destination (default ~/.gemini-manager)")
+    p.add_argument("--dest", default=DEFAULT_GEMINI_HOME, help=f"Destination (default {DEFAULT_GEMINI_HOME})")
     p.add_argument("--force", action="store_true", help="Allow destructive replace without keeping .bak")
     p.add_argument("--dry-run", action="store_true", help="Do a dry run without destructive actions")
+    restore_mode = p.add_mutually_exclusive_group()
+    restore_mode.add_argument("--auth-only", action="store_true", help="Restore only Gemini identity files and preserve current sessions (default)")
+    restore_mode.add_argument("--full", action="store_true", help="Replace the whole Gemini state directory")
     p.add_argument("--cloud", action="store_true", help="Restore from Cloud (B2)")
     p.add_argument("--bucket", help="B2 Bucket Name")
     p.add_argument("--b2-id", help="B2 Key ID (or set env GEMINI_B2_KEY_ID)")

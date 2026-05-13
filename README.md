@@ -86,6 +86,16 @@ You can configure `gemini-manager` using **Environment Variables**, **CLI Argume
 
 **Priority Order**: CLI Arguments > Environment Variables > `.env` / Doppler > Saved Config (`~/.gemini-manager/settings.json`)
 
+### Backup Naming Convention
+
+`gemini-manager` uses a strict naming convention for backups to enable automatic discovery and account rotation.
+
+*   **Archives**: `YYYY-MM-DD_HHMMSS-email@example.com.gemini-manager.tar.gz`
+*   **Encrypted Archives**: `...tar.gz.gpg`
+*   **Metadata**: `YYYY-MM-DD_HHMMSS-email@example.com.gemini-manager.metadata.json`
+
+The timestamp in the filename is typically the **scheduled reset time** (in your local timezone) for that account, allowing the tool to quickly identify which backup belongs to which session window.
+
 ### Environment Variables
 
 | Variable | Description | Default | Required |

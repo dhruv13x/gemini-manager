@@ -166,6 +166,28 @@ def test_main_cloud(mock_replace, mock_get_provider, mock_run, mock_email, mock_
         mock_get_provider.assert_called()
         mock_b2.upload_file.assert_called()
 
+
+@patch("gemini_manager.backup.acquire_lock")
+@patch("gemini_manager.backup.read_active_email", return_value="user@example.com")
+@patch("gemini_manager.backup.run")
+@patch("os.replace")
+def test_main_creates_metadata_sidecar(mock_replace, mock_run, mock_email, mock_lock, fs):
+    source_dir = "/tmp/gemini-src"
+    fs.create_dir(source_dir)
+    mock_run.return_value.returncode = 0
+
+    with patch("gemini_manager.backup.make_timestamp", return_value="2025-01-01_120000"):
+        with patch("sys.argv", ["backup.py", "--src", source_dir]):
+            backup.main()
+
+    metadata_path = os.path.expanduser(
+        "~/.gemini-manager/backups/2025-01-01_120000-user@example.com.gemini-manager.metadata.json"
+    )
+    assert os.path.exists(metadata_path)
+    data = json.loads(open(metadata_path).read())
+    assert data["email"] == "user@example.com"
+    assert data["product"] == "gemini"
+
 @patch("gemini_manager.backup.acquire_lock")
 @patch("gemini_manager.backup.read_active_email", return_value="user@example.com")
 @patch("gemini_manager.backup.run")

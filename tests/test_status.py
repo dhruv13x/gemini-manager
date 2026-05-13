@@ -127,6 +127,6 @@ def test_do_status_cloud(mock_sync, mock_get_cloud, mock_get, capsys):
     args = Args()
     mock_get_cloud.return_value = MagicMock()
     status.do_status(args)
-    mock_sync.assert_called_once()
+    assert mock_sync.call_count == 2
     captured = capsys.readouterr()
-    assert "Cloud sync complete." in captured.out
+    assert "Cloud sync (post-fetch) complete." in captured.out

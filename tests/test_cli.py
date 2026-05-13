@@ -232,7 +232,7 @@ def test_main_backup_no_dest_parent(mock_backup):
 # Test arg parsing for restore (cloud options)
 @patch("gemini_manager.cli.perform_restore")
 def test_main_restore_cloud(mock_restore):
-    with patch("sys.argv", ["gm", "restore", "--cloud", "--bucket", "b", "--b2-id", "i", "--b2-key", "k", "--dest", "d", "--force", "--dry-run", "--from-dir", "d", "--from-archive", "a", "--search-dir", "s"]):
+    with patch("sys.argv", ["gm", "restore", "--cloud", "--bucket", "b", "--b2-id", "i", "--b2-key", "k", "--dest", "d", "--force", "--dry-run", "--from-dir", "d", "--from-archive", "a", "--email", "u@example.com", "--auth-only", "--search-dir", "s"]):
         main()
         mock_restore.assert_called()
 

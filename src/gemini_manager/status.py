@@ -134,13 +134,15 @@ from .ui import cprint, console, Table
 from .config import NEON_CYAN, NEON_GREEN, NEON_RED
 
 def do_status(args=None):
+    from .cloud_factory import get_cloud_provider
+    from .reset_helpers import sync_resets_with_cloud, save_live_status_to_resets
+    from .metadata import patch_status_metadata
+
     if args and getattr(args, 'cloud', False):
-        from .cloud_factory import get_cloud_provider
         provider = get_cloud_provider(args)
         if provider:
-            from .reset_helpers import sync_resets_with_cloud
             sync_resets_with_cloud(provider)
-            cprint(NEON_CYAN, "Cloud sync complete.")
+            cprint(NEON_CYAN, "Cloud sync (pre-fetch) complete.")
 
     cprint(NEON_CYAN, "Fetching live status from Gemini...")
     try:
@@ -152,6 +154,19 @@ def do_status(args=None):
     if not status:
         cprint(NEON_RED, "Could not retrieve status. Is the Gemini CLI working?")
         return
+
+    # Save to local store
+    save_live_status_to_resets(status)
+    metadata_path = patch_status_metadata(status, args)
+    if metadata_path:
+        cprint(NEON_CYAN, f"Metadata updated: {metadata_path}")
+
+    # Sync to cloud if requested
+    if args and getattr(args, 'cloud', False):
+        provider = get_cloud_provider(args)
+        if provider:
+            sync_resets_with_cloud(provider)
+            cprint(NEON_CYAN, "Cloud sync (post-fetch) complete.")
 
     cprint(NEON_GREEN, f"Email : {status['email']}")
 

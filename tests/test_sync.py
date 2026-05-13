@@ -50,11 +50,9 @@ def test_get_cloud_backups_fail():
         get_cloud_backups(mock_b2)
 
 @patch("gemini_manager.sync.get_cloud_provider")
-@patch("gemini_manager.sync.resolve_credentials")
 @patch("gemini_manager.sync.get_cloud_backups")
 @patch("gemini_manager.sync.cprint")
-def test_perform_sync_push_upload(mock_cprint, mock_get_cloud, mock_creds, mock_get_provider, fs):
-    mock_creds.return_value = ("id", "key", "bucket")
+def test_perform_sync_push_upload(mock_cprint, mock_get_cloud, mock_get_provider, fs):
     mock_get_cloud.return_value = set() # Empty cloud
 
     mock_b2 = MagicMock()
@@ -72,11 +70,9 @@ def test_perform_sync_push_upload(mock_cprint, mock_get_cloud, mock_creds, mock_
     mock_b2.upload_file.assert_called()
 
 @patch("gemini_manager.sync.get_cloud_provider")
-@patch("gemini_manager.sync.resolve_credentials")
 @patch("gemini_manager.sync.get_cloud_backups")
 @patch("gemini_manager.sync.cprint")
-def test_perform_sync_push_no_upload(mock_cprint, mock_get_cloud, mock_creds, mock_get_provider, fs):
-    mock_creds.return_value = ("id", "key", "bucket")
+def test_perform_sync_push_no_upload(mock_cprint, mock_get_cloud, mock_get_provider, fs):
     mock_get_cloud.return_value = {"file.gemini-manager.tar.gz"} # Already exists
 
     mock_b2 = MagicMock()
@@ -94,11 +90,9 @@ def test_perform_sync_push_no_upload(mock_cprint, mock_get_cloud, mock_creds, mo
     mock_b2.upload_file.assert_not_called()
 
 @patch("gemini_manager.sync.get_cloud_provider")
-@patch("gemini_manager.sync.resolve_credentials")
 @patch("gemini_manager.sync.get_cloud_backups")
 @patch("gemini_manager.sync.cprint")
-def test_perform_sync_pull_download(mock_cprint, mock_get_cloud, mock_creds, mock_get_provider, fs):
-    mock_creds.return_value = ("id", "key", "bucket")
+def test_perform_sync_pull_download(mock_cprint, mock_get_cloud, mock_get_provider, fs):
     mock_get_cloud.return_value = {"cloud.gemini-manager.tar.gz"}
 
     mock_b2 = MagicMock()
@@ -115,11 +109,9 @@ def test_perform_sync_pull_download(mock_cprint, mock_get_cloud, mock_creds, moc
     mock_b2.download_file.assert_called()
 
 @patch("gemini_manager.sync.get_cloud_provider")
-@patch("gemini_manager.sync.resolve_credentials")
 @patch("gemini_manager.sync.get_cloud_backups")
 @patch("gemini_manager.sync.cprint")
-def test_perform_sync_pull_no_download(mock_cprint, mock_get_cloud, mock_creds, mock_get_provider, fs):
-    mock_creds.return_value = ("id", "key", "bucket")
+def test_perform_sync_pull_no_download(mock_cprint, mock_get_cloud, mock_get_provider, fs):
     mock_get_cloud.return_value = {"file.gemini-manager.tar.gz"}
 
     mock_b2 = MagicMock()

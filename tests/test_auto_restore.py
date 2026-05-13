@@ -36,7 +36,7 @@ def test_restore_auto_success(mock_mkdtemp, mock_rmtree, mock_move, mock_replace
 
     mock_run.return_value.returncode = 0
 
-    with patch("sys.argv", ["restore.py", "--auto"]):
+    with patch("sys.argv", ["restore.py", "--full", "--auto"]):
         restore.main()
 
     # Verify that get_recommendation was called

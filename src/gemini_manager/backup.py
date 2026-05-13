@@ -29,6 +29,7 @@ import time
 from typing import Optional
 from .config import TIMESTAMPED_DIR_REGEX, DEFAULT_BACKUP_DIR, OLD_CONFIGS_DIR, GEMINI_CLI_HOME
 from .cloud_factory import get_cloud_provider
+from .metadata import create_backup_metadata, load_latest_status_for_email
 
 LOCKFILE = os.path.join(GEMINI_CLI_HOME, ".backup.lock")
 
@@ -52,8 +53,9 @@ def shlex_quote(s: str) -> str:
     import shlex
     return shlex.quote(s)
 
-def read_active_email(gemini_dir: str) -> Optional[str]:
-    path = os.path.join(gemini_dir, "google_accounts.json")
+def read_active_email(gemini_dir: str = None) -> Optional[str]:
+    from .config import DEFAULT_GEMINI_HOME
+    path = os.path.join(gemini_dir or DEFAULT_GEMINI_HOME, "google_accounts.json")
     if not os.path.exists(path):
         return None
     try:
@@ -102,22 +104,50 @@ def perform_backup(args: argparse.Namespace):
     Main backup logic separated from argument parsing.
     Accepts an argparse.Namespace or any object with the required attributes.
     """
+    from .config import DEFAULT_GEMINI_HOME
+    from .reset_helpers import get_all_resets
+
     src = os.path.abspath(os.path.expanduser(args.src))
+    # If src is the default GEMINI_CLI_HOME (~/.gemini-manager), 
+    # we should actually be backing up ~/.gemini (the application data)
+    # unless the user explicitly changed --src.
+    actual_src = src
+    if src == os.path.abspath(os.path.expanduser(GEMINI_CLI_HOME)):
+        actual_src = os.path.abspath(os.path.expanduser(DEFAULT_GEMINI_HOME))
+
     archive_dir = os.path.abspath(os.path.expanduser(args.archive_dir))
     dest_parent = os.path.abspath(os.path.expanduser(args.dest_dir_parent))
-    ts = make_timestamp()
+    
+    active_email = read_active_email(actual_src)
+    
+    # Try to find a reset time for this email to use as the timestamp
+    ts = None
+    if active_email:
+        resets = get_all_resets()
+        my_resets = [r for r in resets if r.get("email") == active_email]
+        if my_resets:
+            # Sort by reset_ist descending to get the latest captured reset
+            my_resets.sort(key=lambda x: x.get("reset_ist"), reverse=True)
+            latest_reset = my_resets[0].get("reset_ist")
+            if latest_reset:
+                from datetime import datetime
+                dt = datetime.fromisoformat(latest_reset)
+                ts = dt.strftime("%Y-%m-%d_%H%M%S")
+                print(f"Using captured reset time for backup naming: {ts}")
 
-    if not os.path.exists(src):
-        print(f"Source does not exist: {src}")
+    if not ts:
+        ts = make_timestamp()
+
+    if not os.path.exists(actual_src):
+        print(f"Source does not exist: {actual_src}")
         sys.exit(1)
 
-    active_email = read_active_email(src)
     if active_email:
         # Example: 2025-10-22_042211-bose13x@gmail.com.gemini-manager
         dest_basename = f"{ts}-{active_email}.gemini-manager"
     else:
         dest_basename = f"{ts}-gemini-manager-backup.gemini-manager"
-        print("Warning: could not read active email from google_accounts.json; using fallback name:", dest_basename)
+        print("Warning: could not read active email; using fallback name:", dest_basename)
 
     if not TIMESTAMPED_DIR_REGEX.match(dest_basename):
         print(f"Error: Generated backup name '{dest_basename}' does not match the required pattern.")
@@ -125,6 +155,7 @@ def perform_backup(args: argparse.Namespace):
 
     dest = os.path.join(dest_parent, dest_basename)
     archive_path = os.path.join(archive_dir, f"{dest_basename}.tar.gz")
+    metadata_path = None
     latest_symlink = os.path.join(dest_parent, f"{active_email}.gm") if active_email else None
 
     lockfd = acquire_lock()
@@ -133,7 +164,7 @@ def perform_backup(args: argparse.Namespace):
         print(f"[1/4] Creating archive: {archive_path}")
         if not args.dry_run:
             ensure_dir(archive_dir)
-            tar_cmd = f"tar -C {shlex_quote(src)} -czf {shlex_quote(archive_path)} ."
+            tar_cmd = f"tar -C {shlex_quote(actual_src)} -czf {shlex_quote(archive_path)} ."
             run(tar_cmd)
 
             # --- ENCRYPTION LOGIC ---
@@ -184,7 +215,7 @@ def perform_backup(args: argparse.Namespace):
         if not args.dry_run:
             if os.path.exists(tmp_dest):
                 shutil.rmtree(tmp_dest)
-            cp_cmd = f"cp -a {shlex_quote(src)} {shlex_quote(tmp_dest)}"
+            cp_cmd = f"cp -a {shlex_quote(actual_src)} {shlex_quote(tmp_dest)}"
             run(cp_cmd)
         else:
             print("DRY RUN: would cp -a ...")
@@ -192,7 +223,7 @@ def perform_backup(args: argparse.Namespace):
         # 3) Verify copy with diff -r
         print("[3/4] Verifying copy with diff -r")
         if not args.dry_run:
-            diff_proc = run(f"diff -r {shlex_quote(src)} {shlex_quote(tmp_dest)}", check=False, capture=True)
+            diff_proc = run(f"diff -r {shlex_quote(actual_src)} {shlex_quote(tmp_dest)}", check=False, capture=True)
             if diff_proc.returncode != 0:
                 print("Verification FAILED: diff reported differences.")
                 if diff_proc.stdout:
@@ -210,9 +241,33 @@ def perform_backup(args: argparse.Namespace):
         if not args.dry_run:
             ensure_dir(os.path.dirname(dest))
             # tmp_dest is full copy of src; move it to dest (atomic rename)
-            os.replace(tmp_dest, dest)
+            try:
+                os.replace(tmp_dest, dest)
+            except OSError as e:
+                # Fallback for cross-device link OR non-empty directory conflict
+                # ENOTEMPTY (39) or EEXIST (17) or EBUSY (16)
+                if e.errno in [16, 17, 18, 39]:
+                    if os.path.exists(dest):
+                        if os.path.isdir(dest) and not os.path.islink(dest):
+                            shutil.rmtree(dest)
+                        else:
+                            os.remove(dest)
+                    shutil.move(tmp_dest, dest)
+                else:
+                    raise e
             print("Directory backup created at:", dest)
             print("Archive saved at:", archive_path)
+            try:
+                latest_status = load_latest_status_for_email(active_email, get_all_resets()) if active_email else None
+                metadata_path = create_backup_metadata(
+                    archive_path=archive_path,
+                    active_email=active_email,
+                    status=latest_status,
+                )
+                if metadata_path:
+                    print("Metadata saved at:", metadata_path)
+            except Exception as e:
+                print("Warning: failed to create backup metadata:", e)
 
             # Update stable symlink /root/<email>.gm -> timestamped dir
             if latest_symlink:
@@ -232,6 +287,8 @@ def perform_backup(args: argparse.Namespace):
             if provider:
                 # Upload the tar.gz we just created
                 provider.upload_file(archive_path, os.path.basename(archive_path))
+                if metadata_path and os.path.exists(metadata_path):
+                    provider.upload_file(metadata_path, os.path.basename(metadata_path))
             else:
                 print("Error: Cloud backup requested but no valid credentials found.")
                 sys.exit(1)

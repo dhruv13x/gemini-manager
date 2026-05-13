@@ -10,6 +10,7 @@ from .ui import cprint, console, NEON_CYAN, NEON_GREEN, NEON_YELLOW, NEON_RED
 from .b2 import B2Manager
 from .credentials import resolve_credentials
 from .reset_helpers import get_all_resets, remove_entry_by_id, sync_resets_with_cloud
+from .metadata import load_cloud_metadata, load_local_metadata, latest_metadata_by_email
 from . import history
 
 # ... existing code ...
@@ -270,6 +271,7 @@ def do_cooldown_list(args=None):
     Displays the Master Dashboard: merged view of Cooldowns (Switch events) and Scheduled Resets.
     """
     # 1. Sync if requested
+    metadata_records = []
     if args and getattr(args, 'cloud', False):
         _sync_cooldown_file(direction='download', args=args)
         # Also sync resets
@@ -278,8 +280,12 @@ def do_cooldown_list(args=None):
             if key_id and app_key and bucket_name:
                 b2 = B2Manager(key_id, app_key, bucket_name)
                 sync_resets_with_cloud(b2)
+                metadata_records = load_cloud_metadata(b2)
         except Exception as e:
              cprint(NEON_RED, f"[WARN] Failed to sync resets: {e}")
+
+    metadata_records.extend(load_local_metadata())
+    metadata_by_email = latest_metadata_by_email(metadata_records)
 
     # 2. Load Data
     cooldown_map = get_cooldown_data() # {email: last_switch_iso}
@@ -289,6 +295,7 @@ def do_cooldown_list(args=None):
     for entry in resets_list:
         if entry.get("email"):
             all_emails.add(entry["email"].lower())
+    all_emails.update(metadata_by_email.keys())
 
     if not all_emails:
         cprint(NEON_YELLOW, "No account data found (switches or resets).")
@@ -356,6 +363,8 @@ def do_cooldown_list(args=None):
         # --- 2. Hard Resets (Captured from Gemini) ---
         manual_reset_dt = None
         auto_reset_dt = None
+        metadata_entry = metadata_by_email.get(email)
+        metadata_reset_dt = None
         
         my_resets = []
         for r in resets_list:
@@ -380,6 +389,18 @@ def do_cooldown_list(args=None):
                 else:
                     if not manual_reset_dt: manual_reset_dt = r_ts
 
+        if metadata_entry:
+            try:
+                raw_reset = metadata_entry.get("next_available_at") or metadata_entry.get("reset_at")
+                if raw_reset:
+                    metadata_reset_dt = datetime.datetime.fromisoformat(raw_reset)
+                    if metadata_reset_dt.tzinfo is None:
+                        metadata_reset_dt = metadata_reset_dt.astimezone()
+                    else:
+                        metadata_reset_dt = metadata_reset_dt.astimezone()
+            except Exception:
+                metadata_reset_dt = None
+
         # --- 3. Calculate Availability ---
         # Rule: Max(FirstUsed+24h, ManualReset)
         # We ignore auto_reset_dt for availability calculation because it's 
@@ -392,6 +413,8 @@ def do_cooldown_list(args=None):
         # Fallback: if somehow we have NO tool_unlock_time but have an auto_reset, use it.
         if not final_unlock_time and auto_reset_dt:
             final_unlock_time = auto_reset_dt
+        if metadata_reset_dt and (not final_unlock_time or metadata_reset_dt > final_unlock_time):
+            final_unlock_time = metadata_reset_dt
 
         availability_str = "Now"
         avail_style = "[bold green]Now[/]"
@@ -401,7 +424,49 @@ def do_cooldown_list(args=None):
             is_locked = True
             delta = final_unlock_time - now
             availability_str = format_delta(delta)
-            avail_style = "[red]" + availability_str + "[/]"
+
+            avail_style = "[white]" + availability_str + "[/]"
+
+        live_entry = metadata_entry or next((r for r in resets_list if r.get("email", "").lower() == email and r.get("models")), None)
+        if live_entry:
+            model_lines = []
+            captured_raw = live_entry.get("captured_at") or live_entry.get("saved_at")
+            captured_dt = None
+            if captured_raw:
+                try:
+                    captured_dt = datetime.datetime.fromisoformat(captured_raw)
+                    captured_dt = captured_dt.astimezone() if captured_dt.tzinfo else captured_dt.astimezone()
+                except Exception:
+                    captured_dt = None
+
+            for m_name, m_info in live_entry.get("models", {}).items():
+                p = m_info.get("percent", 0)
+                p_color = "green" if p > 50 else "yellow" if p > 10 else "red"
+                m_short = m_name.replace("Flash Lite", "Lite").replace("Flash", "Flsh")
+
+                m_reset_dt = None
+                if m_info.get("reset_at"):
+                    try:
+                        m_reset_dt = datetime.datetime.fromisoformat(m_info["reset_at"]).astimezone()
+                    except Exception:
+                        m_reset_dt = None
+                elif captured_dt is not None:
+                    m_h, m_m = m_info.get("reset_h"), m_info.get("reset_m")
+                    if m_h is not None and m_m is not None:
+                        m_reset_dt = captured_dt + datetime.timedelta(hours=m_h, minutes=m_m)
+
+                if m_reset_dt:
+                    if m_reset_dt > now:
+                        m_rem = format_delta(m_reset_dt - now)
+                        model_lines.append(f"{m_short}:[{p_color}]{p}%[/] ({m_rem})")
+                    else:
+                        model_lines.append(f"{m_short}:[{p_color}]{p}%[/] (Ready)")
+                else:
+                    model_lines.append(f"{m_short}:[{p_color}]{p}%[/]")
+
+            if model_lines:
+                availability_str = "\n".join(model_lines)
+                avail_style = "[white]" + availability_str + "[/]"
 
         # --- 4. Format Display Columns ---
         first_used_str = first_ts.astimezone().strftime('%I:%M %p') if first_ts else "-"
@@ -417,6 +482,9 @@ def do_cooldown_list(args=None):
             diff = auto_reset_dt - now
             # If it's close to tool_unlock, it's just the 'system' cooldown
             parts.append(f"[dim]{format_delta(diff)} (A)[/]")
+        if metadata_reset_dt and metadata_reset_dt > now:
+            diff = metadata_reset_dt - now
+            parts.append(f"[cyan]{format_delta(diff)} (Q)[/]")
         
         next_reset_str = " / ".join(parts) if parts else "-"
 
@@ -435,4 +503,3 @@ def do_cooldown_list(args=None):
     console.print(f"[dim]Current Local Time: {now.strftime('%I:%M %p')}[/]\n")
     console.print(table)
     console.print()
-

@@ -90,7 +90,9 @@ def test_restore_decrypt_calls_gpg(mocker, mock_restore_subprocess):
         force=False,
         dry_run=False,
         cloud=False,
-        auto=False
+        auto=False,
+        full=True,
+        auth_only=False
     )
 
     # Mock environment variable for password

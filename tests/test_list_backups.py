@@ -2,8 +2,10 @@
 
 import pytest
 from unittest.mock import patch, MagicMock
+import json
 import os
 import sys
+import tempfile
 from gemini_manager import list_backups
 
 @patch("gemini_manager.list_backups.B2Manager")
@@ -70,3 +72,47 @@ def test_main_cloud_loop_continue(mock_b2):
         mock_b2.return_value.list_backups.return_value = [(mock_file, None)]
         list_backups.main()
         # Should print "No backups found" because only non-matching file
+
+
+def test_local_rows_latest_per_email_uses_metadata():
+    with tempfile.TemporaryDirectory(prefix="gm-test-list-") as tmpdir:
+        old_archive_name = "2026-05-13_110000-user@example.com.gemini-manager.tar.gz"
+        new_archive_name = "2026-05-13_120000-user@example.com.gemini-manager.tar.gz"
+        open(os.path.join(tmpdir, old_archive_name), "w").close()
+        open(os.path.join(tmpdir, new_archive_name), "w").close()
+        metadata = {
+            "email": "user@example.com",
+            "archive_name": new_archive_name,
+            "captured_at": "2026-05-13T12:01:00+05:30",
+            "next_available_at": "2026-05-14T12:01:00+05:30",
+            "models": {
+                "Flash": {"percent_left": 12},
+                "Flash Lite": {"percent_left": 0},
+                "Pro": {"percent_left": 100},
+            },
+        }
+        metadata_path = os.path.join(tmpdir, "2026-05-13_120000-user@example.com.gemini-manager.metadata.json")
+        with open(metadata_path, "w", encoding="utf-8") as fh:
+            json.dump(metadata, fh)
+
+        rows = list_backups._sort_rows(list_backups._local_rows(tmpdir), latest_only=True)
+
+    assert len(rows) == 1
+    assert rows[0].archive_name == new_archive_name
+    assert rows[0].email == "user@example.com"
+    assert rows[0].flash == 12
+    assert rows[0].lite == 0
+    assert rows[0].pro == 100
+
+
+def test_directory_backups_hidden_unless_requested():
+    with tempfile.TemporaryDirectory(prefix="gm-test-list-") as tmpdir:
+        args = MagicMock(cloud=False, search_dir=tmpdir, all=False, show_dirs=False)
+        with patch("gemini_manager.list_backups._print_directory_backups") as mock_dirs:
+            list_backups.perform_list_backups(args)
+        mock_dirs.assert_not_called()
+
+        args.show_dirs = True
+        with patch("gemini_manager.list_backups._print_directory_backups") as mock_dirs:
+            list_backups.perform_list_backups(args)
+        mock_dirs.assert_called_once()
