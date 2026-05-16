@@ -1,5 +1,10 @@
 # Changelog
 
+## [23.0.0] - 2026-05-16
+### Documentation
+- upgrade README.md to V3.0 Gold Standard (#6)
+- update ROADMAP.md to Strategic Roadmap V3 format (#7)
+
 ## [22.0.0] - 2026-05-13
 
 ## [21.0.0] - 2026-05-13
