@@ -14,19 +14,27 @@ def mock_args(backup_dir="/tmp/backups", b2_id=None, b2_key=None, bucket=None):
 
 def test_get_local_backups(fs):
     # Setup fake filesystem
-    backup_dir = "/path"
+    backup_dir = "/path/backups"
+    accounts_dir = "/root/.gemini-manager/accounts"
     fs.create_dir(backup_dir)
+    fs.create_dir(accounts_dir)
     fs.create_file(os.path.join(backup_dir, "file1.gemini-manager.tar.gz"))
+    fs.create_file(os.path.join(backup_dir, "file1.gemini-manager.snapshot.json"))
+    fs.create_file(os.path.join(accounts_dir, "user@example.com.state.json"))
     fs.create_file(os.path.join(backup_dir, "file2.txt"))
 
     files = get_local_backups(backup_dir)
     assert "file1.gemini-manager.tar.gz" in files
+    assert "file1.gemini-manager.snapshot.json" in files
+    assert "accounts/user@example.com.state.json" in files
     assert "file2.txt" not in files
 
 def test_get_local_backups_no_dir(fs):
+    # Setup accounts dir even if backup dir is missing
+    fs.create_dir("/root/.gemini-manager/accounts")
     # Directory does not exist in fake fs
     files = get_local_backups("/nonexistent")
-    assert files == set()
+    assert isinstance(files, set)
 
 def test_get_cloud_backups():
     mock_b2 = MagicMock()
@@ -35,12 +43,16 @@ def test_get_cloud_backups():
     file1.name = "cloud.gemini-manager.tar.gz"
 
     file2 = MagicMock()
-    file2.name = "cloud.txt"
+    file2.name = "accounts/user.state.json"
 
-    mock_b2.list_files.return_value = [file1, file2]
+    file3 = MagicMock()
+    file3.name = "cloud.txt"
+
+    mock_b2.list_files.return_value = [file1, file2, file3]
 
     files = get_cloud_backups(mock_b2)
     assert "cloud.gemini-manager.tar.gz" in files
+    assert "accounts/user.state.json" in files
     assert "cloud.txt" not in files
 
 def test_get_cloud_backups_fail():
@@ -62,6 +74,7 @@ def test_perform_sync_push_upload(mock_cprint, mock_get_cloud, mock_get_provider
     # Create local file in fake fs
     backup_dir = "/tmp/backups"
     fs.create_dir(backup_dir)
+    fs.create_dir("/root/.gemini-manager/accounts")
     fs.create_file(os.path.join(backup_dir, "local.gemini-manager.tar.gz"))
 
     args = mock_args(backup_dir=backup_dir)
@@ -82,6 +95,7 @@ def test_perform_sync_push_no_upload(mock_cprint, mock_get_cloud, mock_get_provi
     # Create local file in fake fs
     backup_dir = "/tmp/backups"
     fs.create_dir(backup_dir)
+    fs.create_dir("/root/.gemini-manager/accounts")
     fs.create_file(os.path.join(backup_dir, "file.gemini-manager.tar.gz"))
 
     args = mock_args(backup_dir=backup_dir)
@@ -102,6 +116,7 @@ def test_perform_sync_pull_download(mock_cprint, mock_get_cloud, mock_get_provid
     # Local dir exists but is empty
     backup_dir = "/tmp/backups"
     fs.create_dir(backup_dir)
+    fs.create_dir("/root/.gemini-manager/accounts")
 
     args = mock_args(backup_dir=backup_dir)
     perform_sync("pull", args)
@@ -135,6 +150,7 @@ def test_perform_sync_push_missing_dir(mock_cprint, mock_get_provider, fs):
     mock_b2.bucket_name = "test-bucket"
     mock_get_provider.return_value = mock_b2
 
+    fs.create_dir("/root/.gemini-manager/accounts")
     # Directory does not exist
     args = mock_args(backup_dir="/nonexistent")
 

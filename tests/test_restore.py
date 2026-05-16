@@ -849,3 +849,51 @@ def test_restore_cloud_email_selects_latest_backup(fs):
             perform_restore(args)
 
     provider.download_file.assert_called_once_with(latest_name, ANY)
+
+
+def test_restore_circular_move_fix(fs):
+    """
+    Test that restoring to a destination that contains the OLD_CONFIGS_DIR
+    (circular move) is handled correctly by using a temporary move.
+    """
+    # We explicitly patch OLD_CONFIGS_DIR here to ensure we have a controlled scenario
+    # that is guaranteed to be a circular move.
+    my_old_configs_dir = "/tmp/gm-manager/old_configs"
+    dest = "/tmp/gm-manager"
+    
+    os.makedirs(dest, exist_ok=True)
+    fs.create_file(os.path.join(dest, "some_file"), contents="old content")
+    
+    src_dir = "/tmp/new_config"
+    os.makedirs(src_dir, exist_ok=True)
+    fs.create_file(os.path.join(src_dir, "some_file"), contents="new content")
+    
+    args = argparse.Namespace(
+        dest=dest,
+        from_dir=src_dir,
+        full=True,
+        force=False,
+        dry_run=False,
+        auth_only=False,
+        search_dir="/tmp/backups"
+    )
+    
+    with patch("gemini_manager.restore.OLD_CONFIGS_DIR", my_old_configs_dir), \
+         patch("gemini_manager.restore.acquire_lock"), \
+         patch("gemini_manager.restore.run") as mock_run, \
+         patch("os.replace") as mock_replace, \
+         patch("gemini_manager.restore.get_active_session", return_value=None):
+        
+        mock_run.return_value.returncode = 0
+        restore.perform_restore(args)
+    
+    # Verify that the backup was created in our patched OLD_CONFIGS_DIR
+    assert os.path.exists(my_old_configs_dir)
+    bak_files = [f for f in os.listdir(my_old_configs_dir) if f.endswith(".gemini-manager.bak")]
+    assert len(bak_files) == 1
+    
+    # Verify the backup contains the old file
+    bak_path = os.path.join(my_old_configs_dir, bak_files[0])
+    assert os.path.exists(os.path.join(bak_path, "some_file"))
+    with open(os.path.join(bak_path, "some_file"), "r") as f:
+        assert f.read() == "old content"

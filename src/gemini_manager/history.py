@@ -30,6 +30,10 @@ def record_event(email: str, event_type: str = "switch"):
 
     events.append(entry)
 
+    # Enforce Lean Storage: Cap at 50 total events
+    if len(events) > 50:
+        events = events[-50:]
+
     try:
         os.makedirs(os.path.dirname(HISTORY_FILE), exist_ok=True)
         with open(HISTORY_FILE, "w") as f:

@@ -12,23 +12,28 @@ from gemini_manager import list_backups
 def test_main_cloud(mock_b2):
     with patch("sys.argv", ["list_backups.py", "--cloud", "--bucket", "b", "--b2-id", "i", "--b2-key", "k"]):
         mock_file = MagicMock()
-        mock_file.file_name = "backup.gemini-manager.tar.gz"
-        mock_b2.return_value.list_backups.return_value = [(mock_file, None)]
-        list_backups.main()
-        mock_b2.return_value.list_backups.assert_called()
+        mock_file.name = "2026-05-15_120000-user@example.com.gemini-manager.tar.gz"
+        mock_b2.return_value.list_files.return_value = [mock_file]
+        
+        with patch("gemini_manager.registry.sync_registry_with_cloud"):
+            list_backups.main()
+        
+        mock_b2.return_value.list_files.assert_called()
 
 @patch("gemini_manager.list_backups.B2Manager")
 def test_main_cloud_empty(mock_b2):
     with patch("sys.argv", ["list_backups.py", "--cloud", "--bucket", "b", "--b2-id", "i", "--b2-key", "k"]):
-        mock_b2.return_value.list_backups.return_value = []
-        list_backups.main()
+        mock_b2.return_value.list_files.return_value = []
+        with patch("gemini_manager.registry.sync_registry_with_cloud"):
+            list_backups.main()
 
 @patch("gemini_manager.list_backups.B2Manager")
 def test_main_cloud_error(mock_b2):
     with patch("sys.argv", ["list_backups.py", "--cloud", "--bucket", "b", "--b2-id", "i", "--b2-key", "k"]):
-        mock_b2.return_value.list_backups.side_effect = Exception("Error")
-        with pytest.raises(SystemExit):
-            list_backups.main()
+        mock_b2.return_value.list_files.side_effect = Exception("Error")
+        with patch("gemini_manager.registry.sync_registry_with_cloud"):
+            with pytest.raises(SystemExit):
+                list_backups.main()
 
 @patch("gemini_manager.credentials.get_setting", return_value=None)
 @patch.dict(os.environ, {}, clear=True)

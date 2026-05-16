@@ -18,9 +18,15 @@ from typing import Any
 from .b2 import B2Manager
 from .config import DEFAULT_BACKUP_DIR, OLD_CONFIGS_DIR
 from .credentials import resolve_credentials
-from .metadata import latest_metadata_by_email, load_local_metadata
+from .metadata import (
+    latest_entity_by_email,
+    load_local_snapshots,
+    load_local_states,
+    load_cloud_snapshots,
+    load_cloud_states,
+)
 from .restore import is_backup_archive, parse_timestamp_from_name
-from .ui import NEON_RED, NEON_YELLOW, Panel, Table, console, cprint
+from .ui import NEON_RED, NEON_YELLOW, Panel, Table, console, cprint, style_quota_percent
 
 
 @dataclass(frozen=True)
@@ -104,7 +110,12 @@ def _model_percent(models: dict[str, Any], wanted: str) -> int | None:
             continue
         
         info = info or {}
-        # If it explicitly says 'left' or 'remaining', we invert it to get 'used'
+        # Standardize to USAGE percentage
+        if "percent_used" in info:
+            try:
+                return int(info["percent_used"])
+            except (TypeError, ValueError):
+                pass
         if "percent_left" in info:
             try:
                 return 100 - int(info["percent_left"])
@@ -116,10 +127,8 @@ def _model_percent(models: dict[str, Any], wanted: str) -> int | None:
             except (TypeError, ValueError):
                 pass
 
-        # Default to 'percent' or 'percent_used', treating them as 'used' (current CLI behavior)
-        percent = info.get("percent_used")
-        if percent is None:
-            percent = info.get("percent")
+        # Default to 'percent', treating it as Usage (matches Gemini CLI behavior)
+        percent = info.get("percent")
         
         try:
             return int(percent)
@@ -128,40 +137,22 @@ def _model_percent(models: dict[str, Any], wanted: str) -> int | None:
     return None
 
 
-def _style_percent(value: int | None) -> str:
-    """
-    Colorize the percentage. Higher values mean higher usage, so they get 'worse' colors.
-    """
-    if value is None:
-        return "[dim]-[/]"
-    if value >= 100:
-        return f"[red]{value}%[/]"
-    if value >= 90:
-        return f"[bright_red]{value}%[/]"
-    if value >= 65:
-        return f"[yellow]{value}%[/]"
-    return f"[green]{value}%[/]"
-
-
 def _quota_text(row: BackupRow) -> str:
-    return f"F:{_style_percent(row.flash)} L:{_style_percent(row.lite)} P:{_style_percent(row.pro)}"
+    return f"F:{style_quota_percent(row.flash, is_usage=True)} L:{style_quota_percent(row.lite, is_usage=True)} P:{style_quota_percent(row.pro, is_usage=True)}"
 
 
-def _penalty_for_flash(flash_used: int | None) -> str:
+def _penalty_for_flash(usage: int | None) -> str:
     """
     Calculate penalty based on Flash usage.
-    0-64% used -> LOW
-    65-89% used -> MEDIUM
-    90-99% used -> HEAVY
-    100%+ used  -> HIGH
     """
-    if flash_used is None:
+    if usage is None:
         return "[dim]UNKNOWN[/]"
-    if flash_used >= 100:
+    
+    if usage >= 100:
         return "[red]HIGH[/]"
-    if flash_used >= 90:
+    if usage >= 90:
         return "[bright_red]HEAVY[/]"
-    if flash_used >= 65:
+    if usage >= 65:
         return "[yellow]MEDIUM[/]"
     return "[green]LOW[/]"
 
@@ -236,26 +227,79 @@ def _local_rows(search_dir: str) -> list[BackupRow]:
         for name in names
         if os.path.isfile(os.path.join(archive_dir, name)) and is_backup_archive(name)
     ]
-    metadata = load_local_metadata(archive_dir)
+    
+    # Pre-calculate latest archive per email
+    latest_archives = {}
+    for name in archives:
+        email = _email_from_archive_name(name)
+        if not email: continue
+        key = email.lower()
+        ts = _timestamp_key(name)
+        if key not in latest_archives or ts > _timestamp_key(latest_archives[key]):
+            latest_archives[key] = name
+
+    # 1. Load authoritative snapshots
+    snapshots = load_local_snapshots(archive_dir)
+    
+    # 2. Load Registry (The high-performance index)
+    from .registry import get_registry
+    registry_records = get_registry().get_all()
+    
+    # 3. Load decentralized states
+    states = load_local_states()
     
     # Merge entries from the global resets store (used by gm cooldown)
-    # as a fallback when specific archive metadata is missing.
+    # as a fallback when specific archival information is missing.
     from .reset_helpers import get_all_resets
-    metadata.extend(get_all_resets())
+    all_records = list(snapshots)
+    all_records.extend(registry_records) # Prioritize registry for composition
+    all_records.extend(states)
+    all_records.extend(get_all_resets())
 
     metadata_by_archive = {
         record.get("archive_name"): record
-        for record in metadata
+        for record in snapshots
         if record.get("archive_name")
     }
-    metadata_by_email = latest_metadata_by_email(metadata)
+    
+    # Index by email for fallbacks
+    metadata_by_account: dict[str, dict[str, Any]] = {
+        record["email"].lower(): record
+        for record in (registry_records + states) # Use Registry or State
+        if record.get("email")
+    }
+
+    from .metadata import ENTITY_PRIORITY
+    metadata_by_email = latest_entity_by_email(all_records)
 
     rows = []
     for archive_name in archives:
         email = _email_from_archive_name(archive_name)
+        
+        # Default to archive-specific record
         record = metadata_by_archive.get(archive_name)
+        
+        # If this is the LATEST archive for this email, 
+        # attempt to use the most authoritative account health (Registry/State/Reset)
+        if email and archive_name == latest_archives.get(email.lower()):
+            latest_rec = metadata_by_email.get(email.lower())
+            if latest_rec:
+                # Only upgrade to latest_rec if it's more authoritative or newer than the archive snapshot
+                rec_type = latest_rec.get("_entity_type", "reset")
+                rec_prio = ENTITY_PRIORITY.get(rec_type, 0)
+                
+                # archive snapshot prio is effectively 200 (SnapshotRecord)
+                if rec_prio > 200 or _metadata_time_key(latest_rec) > _timestamp_key(archive_name):
+                    record = latest_rec
+        
         if not record and email:
+            # Fallback 1: Registry or Mutable Account State
+            record = metadata_by_account.get(email.lower())
+        
+        if not record and email:
+            # Fallback 2: Latest general record (snapshot or reset)
             record = metadata_by_email.get(email.lower())
+            
         if record:
             rows.append(_row_from_metadata(record, archive_name, "local"))
         else:
@@ -268,30 +312,64 @@ def _cloud_rows(args: argparse.Namespace) -> list[BackupRow]:
     b2 = B2Manager(key_id, app_key, bucket_name)
 
     try:
-        listed = list(b2.list_backups())
+        listed = list(b2.list_files()) # Returns List[CloudFile]
     except Exception as exc:
         cprint(NEON_RED, f"[CLOUD] Failed to list backups from B2: {exc}")
         sys.exit(1)
 
-    names = [getattr(file_version, "file_name", "") for file_version, _ in listed]
+    names = [f.name for f in listed]
     archives = [name for name in names if is_backup_archive(name)]
-    metadata_names = [name for name in names if name.endswith(".metadata.json")]
-    metadata_by_archive: dict[str, dict[str, Any]] = {}
-    metadata_records: list[dict[str, Any]] = []
+    
+    # Pre-calculate latest archive per email
+    latest_archives = {}
+    for name in archives:
+        email = _email_from_archive_name(name)
+        if not email: continue
+        key = email.lower()
+        ts = _timestamp_key(name)
+        if key not in latest_archives or ts > _timestamp_key(latest_archives[key]):
+            latest_archives[key] = name
 
-    with tempfile.TemporaryDirectory(prefix="gm-list-backups-") as tmp:
-        for remote_name in metadata_names:
-            local_path = os.path.join(tmp, os.path.basename(remote_name))
-            try:
-                b2.download_file(remote_name, local_path)
-                with open(local_path, "r", encoding="utf-8") as fh:
-                    record = json.load(fh)
-            except Exception:
-                continue
-            archive_name = record.get("archive_name")
-            if archive_name:
-                metadata_by_archive[archive_name] = record
-            metadata_records.append(record)
+    # 1. Sync Registry from cloud (The primary health source)
+    from .registry import sync_registry_with_cloud, get_registry
+    try:
+        sync_registry_with_cloud(b2, direction="pull")
+    except Exception:
+        pass
+    
+    registry_records = get_registry().get_all()
+    
+    # 2. Namespace Peeking: Extract identity and reset time from filenames
+    # This provides a near-zero cost initial view.
+    peeking_records = []
+    for archive_name in archives:
+        email = _email_from_archive_name(archive_name)
+        # We use parse_timestamp_from_name to get the 'reset_at' encoded in filename
+        reset_ts = parse_timestamp_from_name(archive_name)
+        if email and reset_ts:
+            peeking_records.append({
+                "email": email,
+                "reset_at": time.strftime("%Y-%m-%dT%H:%M:%S%z", reset_ts),
+                "next_available_at": time.strftime("%Y-%m-%dT%H:%M:%S%z", reset_ts),
+                "archive_name": archive_name,
+                "_entity_type": "snapshot",
+                "status_source": "namespace_peeking"
+            })
+
+    metadata_by_archive: dict[str, dict[str, Any]] = {
+        record.get("archive_name"): record
+        for record in peeking_records
+    }
+    
+    metadata_by_account: dict[str, dict[str, Any]] = {
+        record["email"].lower(): record
+        for record in registry_records
+        if record.get("email")
+    }
+
+    # Compose all cloud-sourced records
+    all_cloud_records = list(peeking_records)
+    all_cloud_records.extend(registry_records)
 
     # Pull in the remote resets store if available
     try:
@@ -299,18 +377,40 @@ def _cloud_rows(args: argparse.Namespace) -> list[BackupRow]:
         if remote_resets:
             resets_data = json.loads(remote_resets)
             if isinstance(resets_data, list):
-                metadata_records.extend(resets_data)
+                all_cloud_records.extend(resets_data)
     except Exception:
         pass
 
-    metadata_by_email = latest_metadata_by_email(metadata_records)
+    from .metadata import ENTITY_PRIORITY
+    metadata_by_email = latest_entity_by_email(all_cloud_records)
 
     rows = []
     for archive_name in archives:
         email = _email_from_archive_name(archive_name)
+        
+        # Start with archive-specific peeking
         record = metadata_by_archive.get(archive_name)
+        
+        # If this is the LATEST archive for this email, prefer the most authoritative cloud record
+        if email and archive_name == latest_archives.get(email.lower()):
+            latest_rec = metadata_by_email.get(email.lower())
+            if latest_rec:
+                # Use latest_rec if it's more authoritative or newer than filename peeking
+                rec_type = latest_rec.get("_entity_type", "reset")
+                rec_prio = ENTITY_PRIORITY.get(rec_type, 0)
+                
+                # peeking is priority 200 (snapshot) but lacks model info
+                if rec_prio > 200 or latest_rec.get("models") or _metadata_time_key(latest_rec) > _timestamp_key(archive_name):
+                    record = latest_rec
+
         if not record and email:
+            # Fallback 1: Registry
+            record = metadata_by_account.get(email.lower())
+
+        if not record and email:
+            # Fallback 2: Latest general record (Cloud)
             record = metadata_by_email.get(email.lower())
+
         if record:
             rows.append(_row_from_metadata(record, archive_name, "cloud"))
         else:

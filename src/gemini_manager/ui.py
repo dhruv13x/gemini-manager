@@ -14,6 +14,34 @@ from .config import NEON_GREEN, NEON_CYAN, NEON_YELLOW, NEON_MAGENTA, NEON_RED, 
 # Export console for use in other modules
 console = Console()
 
+def style_quota_percent(value: int | None, is_usage: bool = True) -> str:
+    """
+    Colorize the percentage based on resource consumption.
+    Default is_usage=True:
+    0–50%  USAGE → green
+    50–80% USAGE → yellow
+    80–95% USAGE → dark_orange
+    95–100%USAGE → bold red
+    
+    If is_usage=False, 'value' is treated as REMAINING (100 - usage).
+    """
+    if value is None:
+        return "[dim]-[/]"
+    
+    # Calculate effective 'usage' percentage for coloring logic
+    usage = value if is_usage else (100 - value)
+    
+    if usage >= 95:
+        style = "bold red"
+    elif usage >= 80:
+        style = "dark_orange"
+    elif usage >= 50:
+        style = "yellow"
+    else:
+        style = "green"
+        
+    return f"[{style}]{value}%[/]"
+
 def cprint(color, text):
     """
     Legacy cprint wrapper using rich.
@@ -72,7 +100,8 @@ def print_rich_help():
         ("chat", "Manage chat history"),
         ("check-integrity", "Check integrity of current configuration"),
         ("list-backups", "List available backups"),
-        ("prune", "Prune old backups (local or cloud)"),
+        ("prune", "Prune live workspace (logs, tmp, history)"),
+        ("prune-backups", "Prune old backup archives (local or cloud)"),
         ("check-b2", "Verify Backblaze B2 credentials"),
         ("sync", "Sync backups with Cloud (push/pull)"),
         ("config", "Manage persistent configuration"),

@@ -4,18 +4,21 @@
 import os
 import json
 import datetime
-from typing import Dict
+from typing import Dict, Any
 
-from .ui import cprint, console, NEON_CYAN, NEON_GREEN, NEON_YELLOW, NEON_RED
+from .ui import cprint, console, NEON_CYAN, NEON_GREEN, NEON_YELLOW, NEON_RED, style_quota_percent
 from .b2 import B2Manager
 from .credentials import resolve_credentials
+from .session import get_active_session
 from .reset_helpers import get_all_resets, remove_entry_by_id, sync_resets_with_cloud
-from .metadata import load_cloud_metadata, load_local_metadata, latest_metadata_by_email
+from .metadata import load_cloud_snapshots, load_cloud_states, load_local_snapshots, load_local_states, latest_entity_by_email
 from . import history
-
-# ... existing code ...
+from .config import NEON_CYAN, NEON_YELLOW, NEON_GREEN, NEON_RED, COOLDOWN_FILE
 
 from rich.prompt import Confirm
+from rich.table import Table
+from rich.panel import Panel
+from rich.align import Align
 
 def do_reset_all(args):
     """
@@ -122,66 +125,100 @@ def do_remove_account(email: str, args=None):
     except Exception:
         # Creds not available, skip silent
         pass
-from rich.table import Table
-from rich.panel import Panel
-from rich.align import Align
 
-
-from .config import NEON_CYAN, NEON_YELLOW, NEON_GREEN, NEON_RED, COOLDOWN_FILE
 
 # File to store cooldown data
 CLOUD_COOLDOWN_FILENAME = "gm-cooldown.json"
 COOLDOWN_HOURS = 24
 
 
-def _sync_cooldown_file(direction: str, args):
+def merge_cooldowns(local: Dict[str, Any], remote: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Private helper to sync the cooldown file with B2 cloud storage.
+    Merges two cooldown maps. For each email, it keeps the one with the later 'last_used'.
+    """
+    merged = dict(local)
+    for email, remote_entry in remote.items():
+        if email not in merged:
+            merged[email] = remote_entry
+            continue
+            
+        local_entry = merged[email]
+        
+        # Helper to get timestamp for comparison
+        def get_last_used(e):
+            if isinstance(e, dict):
+                return e.get("last_used") or e.get("first_used") or ""
+            return e or "" # Legacy string format
 
-    Args:
-        direction: 'upload' or 'download'.
-        args: Command-line arguments containing B2 credentials.
+        if get_last_used(remote_entry) > get_last_used(local_entry):
+            merged[email] = remote_entry
+            
+    return merged
+
+def sync_cooldown_with_cloud(args):
+    """
+    Bi-directional sync: Downloads cloud cooldowns, merges with local, and pushes back.
     """
     try:
         key_id, app_key, bucket_name = resolve_credentials(args)
         if not all([key_id, app_key, bucket_name]):
-            cprint(NEON_YELLOW, "Warning: Cloud credentials not fully configured. Skipping cloud sync.")
             return
 
         b2 = B2Manager(key_id, app_key, bucket_name)
         local_path = os.path.expanduser(COOLDOWN_FILE)
 
-        if direction == "download":
-            cprint(NEON_CYAN, f"Downloading latest cooldown file from B2 bucket '{bucket_name}'...")
-            content = b2.download_to_string(CLOUD_COOLDOWN_FILENAME)
-            
-            if content is None:
-                cprint(NEON_YELLOW, "No cooldown file found in the cloud. Using local version.")
-            else:
-                try:
-                    os.makedirs(os.path.dirname(local_path), exist_ok=True)
-                    with open(local_path, "w") as f:
-                        f.write(content)
-                    cprint(NEON_GREEN, "Cooldown file synced from cloud.")
-                except IOError as e:
-                    cprint(NEON_RED, f"Error writing local cooldown file: {e}")
-
-        elif direction == "upload":
-            if not os.path.exists(local_path):
-                cprint(NEON_YELLOW, "Local cooldown file not found. Skipping upload.")
-                return
-            cprint(NEON_CYAN, f"Uploading cooldown file to B2 bucket '{bucket_name}'...")
+        cprint(NEON_CYAN, "Syncing cooldowns with cloud...")
+        
+        # 1. Download
+        remote_content = b2.download_to_string(CLOUD_COOLDOWN_FILENAME)
+        remote_data = {}
+        if remote_content:
             try:
-                b2.upload(local_path, CLOUD_COOLDOWN_FILENAME)
-                cprint(NEON_GREEN, "Cooldown file synced to cloud.")
-            except Exception as e:
-                cprint(NEON_RED, f"Error uploading cooldown file: {e}")
+                remote_data = json.loads(remote_content)
+            except json.JSONDecodeError:
+                cprint(NEON_YELLOW, "[WARN] Cloud cooldown file was corrupt.")
+
+        # 2. Merge
+        local_data = get_cooldown_data()
+        merged_data = merge_cooldowns(local_data, remote_data)
+
+        # 3. Save Local
+        os.makedirs(os.path.dirname(local_path), exist_ok=True)
+        with open(local_path, "w") as f:
+            json.dump(merged_data, f, indent=4)
+
+        # 4. Upload
+        try:
+            b2.upload_string(json.dumps(merged_data), CLOUD_COOLDOWN_FILENAME)
+            cprint(NEON_GREEN, "[OK] Cooldowns synced successfully!")
+        except Exception as e:
+            cprint(NEON_RED, f"[ERROR] Failed to upload cooldowns: {e}")
 
     except Exception as e:
-        cprint(NEON_RED, f"An unexpected error occurred during cloud sync: {e}")
+        cprint(NEON_RED, f"Unexpected error during cooldown sync: {e}")
+
+def _sync_cooldown_file(direction: str, args):
+    """
+    DEPRECATED: Use sync_cooldown_with_cloud for bi-directional sync.
+    Private helper to sync the cooldown file with B2 cloud storage.
+    """
+    if direction == "download":
+        sync_cooldown_with_cloud(args)
+        return
+    
+    # Fallback for explicit upload if needed by some legacy calls
+    try:
+        key_id, app_key, bucket_name = resolve_credentials(args)
+        if not all([key_id, app_key, bucket_name]): return
+        b2 = B2Manager(key_id, app_key, bucket_name)
+        local_path = os.path.expanduser(COOLDOWN_FILE)
+        if os.path.exists(local_path):
+            b2.upload(local_path, CLOUD_COOLDOWN_FILENAME)
+    except Exception:
+        pass
 
 
-def get_cooldown_data() -> Dict[str, str]:
+def get_cooldown_data() -> Dict[str, Any]:
     """
     Reads the cooldown data from the JSON file.
 
@@ -218,7 +255,7 @@ def record_switch(email: str, args=None):
 
     # If cloud is configured, sync down the master file first to merge with it.
     if args:
-        _sync_cooldown_file(direction='download', args=args)
+        sync_cooldown_with_cloud(args)
         
     path = os.path.expanduser(COOLDOWN_FILE)
     # Now, get the most up-to-date data (either from cloud or local).
@@ -264,28 +301,49 @@ def record_switch(email: str, args=None):
 
     # If cloud is configured, sync the merged file back up.
     if args:
-        _sync_cooldown_file(direction='upload', args=args)
+        # Use explicit upload or unified sync
+        try:
+            key_id, app_key, bucket_name = resolve_credentials(args)
+            if key_id and app_key and bucket_name:
+                b2 = B2Manager(key_id, app_key, bucket_name)
+                b2.upload_string(json.dumps(data), CLOUD_COOLDOWN_FILENAME)
+        except Exception:
+            pass
 
 def do_cooldown_list(args=None):
     """
     Displays the Master Dashboard: merged view of Cooldowns (Switch events) and Scheduled Resets.
     """
     # 1. Sync if requested
-    metadata_records = []
     if args and getattr(args, 'cloud', False):
-        _sync_cooldown_file(direction='download', args=args)
-        # Also sync resets
+        sync_cooldown_with_cloud(args)
+        
+        # Also sync registry and resets
         try:
             key_id, app_key, bucket_name = resolve_credentials(args)
             if key_id and app_key and bucket_name:
                 b2 = B2Manager(key_id, app_key, bucket_name)
                 sync_resets_with_cloud(b2)
-                metadata_records = load_cloud_metadata(b2)
-        except Exception as e:
-             cprint(NEON_RED, f"[WARN] Failed to sync resets: {e}")
+                
+                # Layer 2: Sync Registry (Aggregated state)
+                from .registry import sync_registry_with_cloud
+                sync_registry_with_cloud(b2, direction="pull")
+        except Exception:
+             pass
 
-    metadata_records.extend(load_local_metadata())
-    metadata_by_email = latest_metadata_by_email(metadata_records)
+    # 2. Composition of entities following Layered Authority hierarchy
+    from .registry import get_registry
+    registry_records = get_registry().get_all()
+    
+    local_states = load_local_states()
+    local_snapshots = load_local_snapshots()
+    
+    # Authoritative ranking: Index > State > Snapshot
+    all_records = list(registry_records)
+    all_records.extend(local_states)
+    all_records.extend(local_snapshots)
+    
+    metadata_by_email = latest_entity_by_email(all_records)
 
     # 2. Load Data
     cooldown_map = get_cooldown_data() # {email: last_switch_iso}
@@ -305,7 +363,7 @@ def do_cooldown_list(args=None):
     table = Table(show_header=True, header_style="bold white", border_style="blue", padding=(0, 1))
     table.add_column("Account", style="cyan")
     table.add_column("Status", justify="center")
-    table.add_column("Availability", style="white")
+    table.add_column("Usage", style="white")
     table.add_column("First Used", style="dim")
     table.add_column("Last Used", style="dim")
     table.add_column("Next Scheduled Reset", style="magenta")
@@ -328,12 +386,14 @@ def do_cooldown_list(args=None):
         return f"{s//86400}d ago"
 
     sorted_emails = sorted(list(all_emails))
+    active_email = get_active_session()
 
     for email in sorted_emails:
         # --- 1. Tool-Enforced Quota Reset (First Used + 24h Rule) ---
         first_ts = None
         last_ts = None
         tool_unlock_time = None
+        is_active = (active_email and active_email.lower() == email.lower())
         
         if email in cooldown_map:
             entry_data = cooldown_map[email]
@@ -428,6 +488,8 @@ def do_cooldown_list(args=None):
             avail_style = "[white]" + availability_str + "[/]"
 
         live_entry = metadata_entry or next((r for r in resets_list if r.get("email", "").lower() == email and r.get("models")), None)
+        has_model_quota = True # Assume quota unless explicitly exhausted
+        
         if live_entry:
             model_lines = []
             captured_raw = live_entry.get("captured_at") or live_entry.get("saved_at")
@@ -439,9 +501,15 @@ def do_cooldown_list(args=None):
                 except Exception:
                     captured_dt = None
 
+            exhausted_models = 0
+            total_models = 0
+            
             for m_name, m_info in live_entry.get("models", {}).items():
                 p = m_info.get("percent", 0)
-                p_color = "green" if p > 50 else "yellow" if p > 10 else "red"
+                total_models += 1
+                if p >= 100: exhausted_models += 1
+                
+                p_styled = style_quota_percent(p, is_usage=True)
                 m_short = m_name.replace("Flash Lite", "Lite").replace("Flash", "Flsh")
 
                 m_reset_dt = None
@@ -458,11 +526,18 @@ def do_cooldown_list(args=None):
                 if m_reset_dt:
                     if m_reset_dt > now:
                         m_rem = format_delta(m_reset_dt - now)
-                        model_lines.append(f"{m_short}:[{p_color}]{p}%[/] ({m_rem})")
+                        model_lines.append(f"{m_short}:{p_styled} ({m_rem})")
                     else:
-                        model_lines.append(f"{m_short}:[{p_color}]{p}%[/] (Ready)")
+                        model_lines.append(f"{m_short}:{p_styled} (Ready)")
                 else:
-                    model_lines.append(f"{m_short}:[{p_color}]{p}%[/]")
+                    # Special case for Pro model on Free Tier accounts
+                    if m_name == "Pro" and p >= 100:
+                        model_lines.append(f"{m_short}:{p_styled} [dim](Limited)[/]")
+                    else:
+                        model_lines.append(f"{m_short}:{p_styled}")
+
+            if total_models > 0 and exhausted_models == total_models:
+                has_model_quota = False
 
             if model_lines:
                 availability_str = "\n".join(model_lines)
@@ -489,7 +564,18 @@ def do_cooldown_list(args=None):
         next_reset_str = " / ".join(parts) if parts else "-"
 
         # Determine Status
-        if is_locked:
+        if is_active:
+            # If active, we only show COOLDOWN if it's REALLY exhausted (hard resets)
+            # or if it's 100% used on all models.
+            is_hard_locked = (manual_reset_dt and manual_reset_dt > now) or \
+                             (metadata_reset_dt and metadata_reset_dt > now) or \
+                             (not has_model_quota)
+            
+            if is_hard_locked:
+                status = "[bold red]🔴 ACTIVE (Locked)[/]"
+            else:
+                status = "[bold green]🟢 ACTIVE[/]"
+        elif is_locked:
             if manual_reset_dt and manual_reset_dt >= (tool_unlock_time or manual_reset_dt):
                 status = "[bold yellow]🟡 SCHEDULED[/]"
             else:

@@ -10,7 +10,7 @@ from rich.console import Console
 from rich.table import Table
 from .b2 import B2Manager
 from .ui import banner
-from .config import DEFAULT_BACKUP_DIR
+from .config import DEFAULT_BACKUP_DIR, OLD_CONFIGS_DIR, GEMINI_CLI_HOME
 from .credentials import resolve_credentials
 
 console = Console()
@@ -35,8 +35,9 @@ def do_doctor():
 
     # Directories
     dirs = [
-        ("~/.gemini-manager", "Config Dir"),
-        (DEFAULT_BACKUP_DIR, "Backup Dir")
+        (GEMINI_CLI_HOME, "Config Dir"),
+        (DEFAULT_BACKUP_DIR, "Backup Dir"),
+        (OLD_CONFIGS_DIR, "Old Configs Dir")
     ]
     for d, desc in dirs:
         path = os.path.expanduser(d)

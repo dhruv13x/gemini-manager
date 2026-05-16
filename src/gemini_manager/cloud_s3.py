@@ -1,3 +1,4 @@
+from typing import List, Optional
 import boto3
 from botocore.exceptions import ClientError # Import ClientError
 from .cloud_storage import CloudStorageProvider, CloudFile
@@ -40,7 +41,7 @@ class S3Provider(CloudStorageProvider):
                     files.append(CloudFile(
                         name=obj["Key"],
                         size=obj["Size"],
-                        last_modified=obj["LastModified"]
+                        last_modified=obj["LastModified"].timestamp() if hasattr(obj["LastModified"], "timestamp") else obj["LastModified"],
                     ))
             return files
         except Exception as e:

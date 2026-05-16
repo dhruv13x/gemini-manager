@@ -67,12 +67,24 @@ def shlex_quote(s: str) -> str:
 def parse_timestamp_from_name(name: str) -> Optional[time.struct_time]:
     """
     Parse timestamp prefix like '2025-10-22_042211' into struct_time.
-    Return None if it doesn't match.
+    Supports archives, snapshots (new & legacy), and legacy directories.
     """
-    m = TIMESTAMPED_DIR_REGEX.match(name)
-    if not m:
+    from .config import ARCHIVE_REGEX, SNAPSHOT_REGEX, TIMESTAMPED_DIR_REGEX
+    
+    # Check current patterns
+    match = ARCHIVE_REGEX.match(name) or SNAPSHOT_REGEX.match(name) or TIMESTAMPED_DIR_REGEX.match(name)
+    
+    # Fallback for legacy .metadata.json snapshots
+    if not match and name.endswith(".metadata.json"):
+        # Pattern: YYYY-MM-DD_HHMMSS-<email>.gemini-manager.metadata.json
+        # We reuse TIMESTAMPED_DIR_REGEX logic by stripping the suffix
+        legacy_name = name[:-14] # strip .metadata.json
+        match = TIMESTAMPED_DIR_REGEX.match(legacy_name)
+
+    if not match:
         return None
-    ts_str = m.group(1)  # 'YYYY-MM-DD_HHMMSS'
+    
+    ts_str = match.group(1)  # 'YYYY-MM-DD_HHMMSS'
     try:
         return time.strptime(ts_str, "%Y-%m-%d_%H%M%S")
     except Exception:
@@ -470,6 +482,8 @@ def perform_restore(args: argparse.Namespace):
         from_archive = oldest_archive
         print(f"Auto-selected oldest backup archive: {from_archive}")
 
+    email_label = f"-{email_before}" if email_before else "-unknown-session"
+
     lockfd = acquire_lock()
     try:
         work_tmp = tempfile.mkdtemp(prefix="gm-restore-")
@@ -488,7 +502,7 @@ def perform_restore(args: argparse.Namespace):
 
             if auth_only:
                 cprint(NEON_CYAN, "Restore mode: auth-only (preserving current sessions, history, and project state)")
-                backup_dir = _backup_current_auth_files(dest, ts_now, getattr(args, 'dry_run', False))
+                backup_dir = _backup_current_auth_files(dest, f"{ts_now}{email_label}", getattr(args, 'dry_run', False))
                 copied = _copy_auth_only_files(src_for_copy, dest, getattr(args, 'dry_run', False))
                 if not copied:
                     cprint(NEON_RED, "No Gemini identity files found in selected backup.")
@@ -531,7 +545,7 @@ def perform_restore(args: argparse.Namespace):
             bakname = None
             if not auth_only and os.path.exists(dest):
                 if not args.force:
-                    bak_filename = f".gemini-manager.bak-{ts_now}"
+                    bak_filename = f"{ts_now}{email_label}.gemini-manager.bak"
                     bakname = os.path.join(OLD_CONFIGS_DIR, bak_filename)
                     
                     if args.dry_run:
@@ -541,7 +555,16 @@ def perform_restore(args: argparse.Namespace):
                         # If destination archive exists (highly unlikely with timestamp), remove it first or it will fail/nest
                         if os.path.exists(bakname):
                              shutil.rmtree(bakname)
-                        shutil.move(dest, bakname)
+                        
+                        # Check for circular move (moving a directory into itself)
+                        if os.path.abspath(bakname).startswith(os.path.abspath(dest) + os.sep):
+                             cprint(NEON_YELLOW, f"Circular move detected. Moving {dest} via temporary path...")
+                             tmp_move = dest + f".tmp_move_{int(time.time())}"
+                             shutil.move(dest, tmp_move)
+                             os.makedirs(os.path.dirname(bakname), exist_ok=True)
+                             shutil.move(tmp_move, bakname)
+                        else:
+                             shutil.move(dest, bakname)
                 else:
                     if args.dry_run:
                         cprint(NEON_YELLOW, f"[DRY-RUN] Would remove existing {dest} (--force)")

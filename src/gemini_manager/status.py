@@ -130,7 +130,7 @@ def get_live_status() -> Optional[Dict]:
     sh(f"tmux kill-session -t {SESSION}", check=False)
     return result
 
-from .ui import cprint, console, Table
+from .ui import cprint, console, Table, style_quota_percent
 from .config import NEON_CYAN, NEON_GREEN, NEON_RED
 
 def do_status(args=None):
@@ -172,10 +172,16 @@ def do_status(args=None):
 
     table = Table(show_header=True, header_style="bold white", border_style="blue")
     table.add_column("Model", style="cyan")
-    table.add_column("Remaining", justify="right", style="green")
+    table.add_column("Usage", justify="right")
     table.add_column("Extra/Resets", style="yellow")
 
     for model, data in status['models'].items():
-        table.add_row(model, f"{data['percent']}%", data['extra'])
+        extra = data['extra']
+        # Label Pro model on Free Tier accounts
+        if model == "Pro" and data['percent'] >= 100 and not data.get('reset_h'):
+             if not extra or "Resets:" not in extra:
+                 extra = "[dim](Limited/Free Tier)[/]"
+        
+        table.add_row(model, style_quota_percent(data['percent'], is_usage=True), extra)
 
     console.print(table)

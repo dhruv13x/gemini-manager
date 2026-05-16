@@ -185,7 +185,7 @@ def test_main_creates_metadata_sidecar(mock_replace, mock_run, mock_email, mock_
             backup.main()
 
     metadata_path = os.path.expanduser(
-        "~/.gemini-manager/backups/2025-01-01_120000-user@example.com.gemini-manager.metadata.json"
+        "~/.gemini-manager/backups/2025-01-01_120000-user@example.com.gemini-manager.snapshot.json"
     )
     assert os.path.exists(metadata_path)
     data = json.loads(open(metadata_path).read())

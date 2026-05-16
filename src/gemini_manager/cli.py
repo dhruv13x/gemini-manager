@@ -13,6 +13,7 @@ from .cooldown import do_cooldown_list, do_remove_account, do_reset_all
 from .settings_cli import do_config
 from .doctor import do_doctor
 from .prune import do_prune
+from .prune_backups import perform_prune_backups
 from .update import do_update, do_check_update
 from .recommend import do_recommend
 from .stats import do_stats
@@ -80,6 +81,8 @@ def main():
         do_doctor()
     elif args.command == "prune":
         do_prune(args)
+    elif args.command == "prune-backups":
+        perform_prune_backups(args)
     elif args.command == "profile":
         do_profile(args)
     elif args.command == "cooldown":

@@ -6,7 +6,13 @@ import argparse
 from .ui import console, NEON_RED
 from .cooldown import get_cooldown_data, COOLDOWN_HOURS
 from .reset_helpers import get_all_resets
-from .metadata import load_cloud_metadata, load_local_metadata, latest_metadata_by_email
+from .metadata import (
+    load_cloud_snapshots,
+    load_cloud_states,
+    load_local_snapshots,
+    load_local_states,
+    latest_entity_by_email,
+)
 
 class AccountStatus(Enum):
     READY = auto()
@@ -56,20 +62,32 @@ def _first_used_for(email: str, cooldown_map) -> Optional[datetime.datetime]:
 
 
 def _metadata_recommendation(args=None) -> Optional[Recommendation]:
-    records = []
+    # 1. Composition of entities following Layered Authority hierarchy
+    from .registry import get_registry
+    registry = get_registry()
+    
     if args and getattr(args, "cloud", False):
         try:
             from .cloud_factory import get_cloud_provider
-
             provider = get_cloud_provider(args)
             if provider:
-                records.extend(load_cloud_metadata(provider))
+                # Layer 2: Sync Registry (Aggregated state)
+                from .registry import sync_registry_with_cloud
+                sync_registry_with_cloud(provider, direction="pull")
         except Exception:
             pass
 
+    all_records = registry.get_all()
+    
     backup_dir = getattr(args, "backup_dir", None)
-    records.extend(load_local_metadata(backup_dir) if backup_dir else load_local_metadata())
-    by_email = latest_metadata_by_email(records)
+    if backup_dir:
+        all_records.extend(load_local_snapshots(backup_dir))
+    else:
+        all_records.extend(load_local_snapshots())
+    
+    all_records.extend(load_local_states())
+
+    by_email = latest_entity_by_email(all_records)
     if not by_email:
         return None
 

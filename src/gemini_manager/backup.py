@@ -27,9 +27,10 @@ import subprocess
 import sys
 import time
 from typing import Optional
-from .config import TIMESTAMPED_DIR_REGEX, DEFAULT_BACKUP_DIR, OLD_CONFIGS_DIR, GEMINI_CLI_HOME
+from .config import TIMESTAMPED_DIR_REGEX, DEFAULT_BACKUP_DIR, OLD_CONFIGS_DIR, GEMINI_CLI_HOME, NEON_RED, NEON_YELLOW, NEON_CYAN
+from .ui import cprint
 from .cloud_factory import get_cloud_provider
-from .metadata import create_backup_metadata, load_latest_status_for_email
+from .metadata import create_backup_snapshot, load_latest_status_for_email
 
 LOCKFILE = os.path.join(GEMINI_CLI_HOME, ".backup.lock")
 
@@ -142,12 +143,13 @@ def perform_backup(args: argparse.Namespace):
         print(f"Source does not exist: {actual_src}")
         sys.exit(1)
 
-    if active_email:
-        # Example: 2025-10-22_042211-bose13x@gmail.com.gemini-manager
-        dest_basename = f"{ts}-{active_email}.gemini-manager"
-    else:
-        dest_basename = f"{ts}-gemini-manager-backup.gemini-manager"
-        print("Warning: could not read active email; using fallback name:", dest_basename)
+    if not active_email:
+        cprint(NEON_YELLOW, "Warning: Could not read active email from source.")
+        cprint(NEON_YELLOW, "Proceeding with 'unknown-session' as the identity.")
+        active_email = "unknown-session"
+
+    # Example: 2025-10-22_042211-bose13x@gmail.com.gemini-manager
+    dest_basename = f"{ts}-{active_email}.gemini-manager"
 
     if not TIMESTAMPED_DIR_REGEX.match(dest_basename):
         print(f"Error: Generated backup name '{dest_basename}' does not match the required pattern.")
@@ -259,7 +261,7 @@ def perform_backup(args: argparse.Namespace):
             print("Archive saved at:", archive_path)
             try:
                 latest_status = load_latest_status_for_email(active_email, get_all_resets()) if active_email else None
-                metadata_path = create_backup_metadata(
+                metadata_path = create_backup_snapshot(
                     archive_path=archive_path,
                     active_email=active_email,
                     status=latest_status,

@@ -114,12 +114,49 @@ def _load_store() -> List[Dict[str, Any]]:
 
 def _save_store(entries: List[Dict[str, Any]]):
     try:
+        # Enforce lean storage: Keep only 2 latest entries per email
+        entries = prune_resets(entries)
+        
         os.makedirs(os.path.dirname(RESETS_FILE), exist_ok=True)
         with open(RESETS_FILE, "w", encoding="utf-8", newline="\n") as f:
             json.dump(entries, f, ensure_ascii=False, indent=2)
     except Exception as e:
         # non-fatal: just print a message
         cprint(NEON_YELLOW, f"[WARN] Failed to write store: {e}")
+
+def prune_resets(entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Lean Storage Policy: Keep only the 2 latest entries per email address.
+    """
+    by_email: Dict[str, List[Dict[str, Any]]] = {}
+    no_email = []
+    
+    for e in entries:
+        email = e.get("email")
+        if not email:
+            no_email.append(e)
+            continue
+        
+        email_key = email.lower()
+        if email_key not in by_email:
+            by_email[email_key] = []
+        by_email[email_key].append(e)
+    
+    pruned = []
+    def get_time(r):
+        # Priority: saved_at > reset_ist
+        return r.get("saved_at") or r.get("reset_ist") or ""
+
+    for email_entries in by_email.values():
+        # Sort descending (newest first)
+        email_entries.sort(key=get_time, reverse=True)
+        pruned.extend(email_entries[:2])
+    
+    # Also limit no-email entries to a small buffer
+    no_email.sort(key=get_time, reverse=True)
+    pruned.extend(no_email[:5])
+    
+    return pruned
 
 IST = timezone(timedelta(hours=5, minutes=30))
 
@@ -458,11 +495,13 @@ def add_24h_cooldown_for_email(email: str) -> Dict[str, Any]:
     now = _now_local()
     reset_dt = None
     saved_string = "Auto-detected 24h cooldown on account switch"
+    live_models = None
 
     try:
         from .status import get_live_status
         status = get_live_status()
         if status and status.get("email") == email:
+            live_models = status.get("models")
             max_timedelta = None
             for m_data in status["models"].values():
                 h, m = m_data.get("reset_h"), m_data.get("reset_m")
@@ -507,7 +546,8 @@ def add_24h_cooldown_for_email(email: str) -> Dict[str, Any]:
         "email": email,
         "saved_string": saved_string,
         "reset_ist": reset_dt.isoformat(),
-        "saved_at": now.isoformat()
+        "saved_at": now.isoformat(),
+        "models": live_models
     }
     
     entries = _load_store()

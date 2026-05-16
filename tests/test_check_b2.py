@@ -34,13 +34,11 @@ def test_main_b2_exception(mock_b2):
         with pytest.raises(SystemExit):
             check_b2.main()
 
-import runpy
-
 @patch.dict(os.environ, {}, clear=True)
 @patch("gemini_manager.check_b2.resolve_credentials")
 def test_main_entrypoint_no_creds(mock_resolve):
     mock_resolve.side_effect = SystemExit(1)
     with patch("sys.argv", ["check_b2.py"]):
         with pytest.raises(SystemExit) as e:
-            runpy.run_module("gemini_manager.check_b2", run_name="__main__")
+            check_b2.main()
     assert e.value.code == 1

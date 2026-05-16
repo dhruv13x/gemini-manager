@@ -5,27 +5,95 @@ import os
 import tempfile
 import time
 from datetime import datetime, timedelta
-from typing import Any, Optional
-
-from .config import DEFAULT_BACKUP_DIR
+from typing import Any, Dict, List, Optional, TypedDict, Union
 
 
-def metadata_path_for_archive(archive_path: str) -> str:
+class ModelState(TypedDict, total=False):
+    percent: int
+    percent_used: int
+    percent_left: int
+    extra: str
+    reset_h: int
+    reset_m: int
+    reset_at: str
+
+
+class SnapshotRecord(TypedDict, total=False):
+    schema_version: int
+    product: str
+    email: str
+    archive_name: str
+    archive_path: str
+    created_at: str
+    captured_at: str
+    reset_at: str
+    models: Dict[str, ModelState]
+    _metadata_name: str
+    _entity_type: str
+
+
+class AccountState(TypedDict, total=False):
+    schema_version: int
+    product: str
+    email: str
+    updated_at: str
+    captured_at: str
+    next_available_at: str
+    models: Dict[str, ModelState]
+    status_source: str
+    metadata_only: bool
+    _metadata_name: str
+    _entity_type: str
+
+
+class ResetRecord(TypedDict, total=False):
+    schema_version: int
+    id: str
+    email: str
+    saved_string: str
+    reset_ist: str
+    saved_at: str
+    models: Optional[Dict[str, Any]]
+    _entity_type: str
+
+
+# Trust-based ranking priority
+# Higher is more authoritative
+ENTITY_PRIORITY = {
+    "state": 300,
+    "snapshot": 200,
+    "reset": 100,
+}
+CURRENT_SCHEMA_VERSION = 2
+
+from .config import DEFAULT_BACKUP_DIR, ACCOUNTS_DIR
+from .cloud_storage import CloudFile
+
+
+def snapshot_path_for_archive(archive_path: str) -> str:
     """
-    Generate the metadata file path for a given backup archive.
+    Generate the immutable snapshot metadata path for a backup archive.
     Example: 
-      backup.tar.gz -> backup.metadata.json
-      backup.tar.gz.gpg -> backup.metadata.json
+      backup.tar.gz -> backup.snapshot.json
     """
     base = archive_path[:-4] if archive_path.endswith(".gpg") else archive_path
     if base.endswith(".tar.gz"):
         base = base[:-7]
-    return f"{base}.metadata.json"
+    return f"{base}.snapshot.json"
+
+
+def get_account_state_path(email: str, accounts_dir: str = ACCOUNTS_DIR) -> str:
+    """
+    Generate the unique, mutable state path for an account's live health.
+    Example: accounts/drdoom13x@gmail.com.state.json
+    """
+    accounts_dir = os.path.abspath(os.path.expanduser(accounts_dir))
+    return os.path.join(accounts_dir, f"{_safe_email(email)}.state.json")
 
 
 def _safe_email(email: str) -> str:
-    """Sanitize email for use in filenames by replacing separators and spaces."""
-    return str(email).replace(os.path.sep, "_").replace(" ", "_")
+    """Sanitize email for use in filenames by replacing separators, spaces and '@'."""
+    return str(email).replace(os.path.sep, "_").replace(" ", "_").replace("@", "_at_")
 
 
 def _now() -> datetime:
@@ -48,7 +116,7 @@ def build_status_metadata(
     *,
     archive_name: str | None = None,
     archive_path: str | None = None,
-    metadata_only: bool = False,
+    metadata_only: bool = True,
 ) -> dict[str, Any]:
     captured_at = _now()
     models = status.get("models", {}) or {}
@@ -66,6 +134,7 @@ def build_status_metadata(
     next_available_at = max(model_resets).isoformat() if model_resets else captured_at.isoformat()
 
     return {
+        "schema_version": CURRENT_SCHEMA_VERSION,
         "product": "gemini",
         "email": status.get("email"),
         "archive_name": archive_name,
@@ -93,13 +162,44 @@ def load_latest_status_for_email(email: str, resets: list[dict[str, Any]]) -> Op
     return {"email": email, "models": latest.get("models", {})}
 
 
-def write_metadata(path: str, metadata: dict[str, Any]) -> None:
+def write_snapshot(path: str, metadata: dict[str, Any]) -> None:
+    """
+    Writes immutable snapshot metadata.
+    Does not perform change detection as snapshots are unique/timestamped.
+    """
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as fh:
-        json.dump(metadata, fh, indent=2)
+        json.dump(metadata, fh, indent=2, sort_keys=True)
 
 
-def create_backup_metadata(
+def write_state(path: str, metadata: dict[str, Any]) -> bool:
+    """
+    Writes mutable account state metadata if content has changed.
+    Returns True if written, False if skipped.
+    """
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    
+    new_data = json.dumps(metadata, indent=2, sort_keys=True)
+    
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                old_metadata = json.load(fh)
+                # Ignore volatile fields when comparing to prevent redundant churn
+                comparison_old = {k: v for k, v in old_metadata.items() if k not in ("updated_at", "captured_at")}
+                comparison_new = {k: v for k, v in metadata.items() if k not in ("updated_at", "captured_at")}
+                
+                if comparison_old == comparison_new:
+                    return False
+        except Exception:
+            pass
+
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(new_data)
+    return True
+
+
+def create_backup_snapshot(
     *,
     archive_path: str,
     active_email: str | None,
@@ -108,7 +208,8 @@ def create_backup_metadata(
     if not active_email:
         return None
 
-    metadata_path = metadata_path_for_archive(archive_path)
+    # 1. Create Immutable Snapshot (Archive Sidecar)
+    snapshot_path = snapshot_path_for_archive(archive_path)
     status = status or {"email": active_email, "models": {}}
     metadata = build_status_metadata(
         status,
@@ -116,21 +217,26 @@ def create_backup_metadata(
         archive_path=archive_path,
         metadata_only=False,
     )
-    write_metadata(metadata_path, metadata)
-    return metadata_path
+    write_snapshot(snapshot_path, metadata)
+    return snapshot_path
 
 
-def _metadata_paths_for_email(backup_dir: str, email: str) -> list[str]:
+def _historical_snapshot_paths(backup_dir: str, email: str) -> list[str]:
     if not os.path.isdir(backup_dir):
         return []
+    safe = _safe_email(email)
     return sorted(
         [
             os.path.join(backup_dir, name)
             for name in os.listdir(backup_dir)
-            if name.endswith(".metadata.json") and _safe_email(email) in name
+            if (name.endswith(".snapshot.json") or name.endswith(".metadata.json")) and safe in name
         ],
         reverse=True,
     )
+
+
+# Union type for all entity records
+EntityRecord = Union[SnapshotRecord, AccountState]
 
 
 def patch_status_metadata(status: dict[str, Any], args: Any = None) -> Optional[str]:
@@ -138,17 +244,13 @@ def patch_status_metadata(status: dict[str, Any], args: Any = None) -> Optional[
     if not email:
         return None
 
-    backup_dir = os.path.abspath(os.path.expanduser(getattr(args, "backup_dir", DEFAULT_BACKUP_DIR)))
-    paths = _metadata_paths_for_email(backup_dir, email)
-    metadata_path = paths[0] if paths else os.path.join(
-        backup_dir,
-        f"{time.strftime('%Y-%m-%d_%H%M%S')}-{_safe_email(email)}.gemini-manager.metadata.json",
-    )
+    accounts_dir = os.path.abspath(os.path.expanduser(getattr(args, "accounts_dir", ACCOUNTS_DIR)))
+    state_path = get_account_state_path(email, accounts_dir)
 
-    existing = {}
-    if os.path.exists(metadata_path):
+    existing: AccountState = {}
+    if os.path.exists(state_path):
         try:
-            with open(metadata_path, "r", encoding="utf-8") as fh:
+            with open(state_path, "r", encoding="utf-8") as fh:
                 existing = json.load(fh)
         except Exception:
             existing = {}
@@ -161,66 +263,213 @@ def patch_status_metadata(status: dict[str, Any], args: Any = None) -> Optional[
     )
     if existing.get("created_at"):
         metadata["created_at"] = existing["created_at"]
-    write_metadata(metadata_path, metadata)
+    
+    was_written = write_state(state_path, metadata)
 
-    if args and getattr(args, "cloud", False):
+    if was_written:
+        # Update Layer 2 Index (Registry)
+        try:
+            from .registry import get_registry
+            get_registry().update_account(email, metadata)
+        except Exception:
+            pass
+
+    if was_written and args and getattr(args, "cloud", False):
         try:
             from .cloud_factory import get_cloud_provider
 
             provider = get_cloud_provider(args)
             if provider:
-                provider.upload_file(metadata_path, os.path.basename(metadata_path))
+                # Still upload individual state for decentralization/multi-machine reconstructability
+                provider.upload_file(state_path, f"accounts/{os.path.basename(state_path)}")
+                # Also sync the Registry for dashboard speed
+                from .registry import sync_registry_with_cloud
+                sync_registry_with_cloud(provider, direction="push")
         except Exception:
             pass
 
-    return metadata_path
+    return state_path
 
 
-def load_local_metadata(backup_dir: str = DEFAULT_BACKUP_DIR) -> list[dict[str, Any]]:
+def load_local_snapshots(backup_dir: str = DEFAULT_BACKUP_DIR) -> List[SnapshotRecord]:
+    """Loads all archival snapshots from the backup directory."""
     backup_dir = os.path.abspath(os.path.expanduser(backup_dir))
-    if not os.path.isdir(backup_dir):
-        return []
-
-    records = []
-    for name in sorted(os.listdir(backup_dir)):
-        if not name.endswith(".metadata.json"):
-            continue
-        path = os.path.join(backup_dir, name)
-        try:
-            with open(path, "r", encoding="utf-8") as fh:
-                data = json.load(fh)
-            data["_metadata_name"] = name
-            records.append(data)
-        except Exception:
-            continue
-    return records
-
-
-def load_cloud_metadata(provider) -> list[dict[str, Any]]:
-    records = []
-    with tempfile.TemporaryDirectory(prefix="gm-metadata-") as tmp:
-        for item in provider.list_files():
-            name = getattr(item, "name", "")
-            if not name.endswith(".metadata.json"):
+    records: List[SnapshotRecord] = []
+    if os.path.isdir(backup_dir):
+        for name in sorted(os.listdir(backup_dir)):
+            # Support both new .snapshot.json and legacy .metadata.json
+            if not (name.endswith(".snapshot.json") or name.endswith(".metadata.json")):
                 continue
-            local_path = os.path.join(tmp, os.path.basename(name))
+            path = os.path.join(backup_dir, name)
             try:
-                provider.download_file(name, local_path)
-                with open(local_path, "r", encoding="utf-8") as fh:
-                    data = json.load(fh)
+                with open(path, "r", encoding="utf-8") as fh:
+                    data: SnapshotRecord = json.load(fh)
                 data["_metadata_name"] = name
+                data["_entity_type"] = "snapshot"
                 records.append(data)
             except Exception:
                 continue
     return records
 
 
-def latest_metadata_by_email(records: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+def load_local_states(accounts_dir: str = ACCOUNTS_DIR) -> List[AccountState]:
+    """Loads all mutable account state files from the accounts directory."""
+    accounts_dir = os.path.abspath(os.path.expanduser(accounts_dir))
+    records: List[AccountState] = []
+    if os.path.isdir(accounts_dir):
+        for name in sorted(os.listdir(accounts_dir)):
+            if not name.endswith(".state.json"):
+                continue
+            path = os.path.join(accounts_dir, name)
+            try:
+                with open(path, "r", encoding="utf-8") as fh:
+                    data: AccountState = json.load(fh)
+                data["_metadata_name"] = name
+                data["_entity_type"] = "state"
+                records.append(data)
+            except Exception:
+                continue
+    return records
+
+
+def parse_cloud_summary(cloud_file: CloudFile) -> Optional[dict[str, Any]]:
     """
-    Find the most recent metadata record for each unique email address,
+    Attempts to reconstruct a basic record from cloud metadata headers.
+    Returns None if essential headers (email) are missing.
+    """
+    m = cloud_file.metadata
+    email = m.get("gm-email")
+    if not email:
+        return None
+        
+    record = {
+        "email": email,
+        "_entity_type": m.get("gm-entity-type", "unknown"),
+        "captured_at": m.get("gm-captured-at"),
+        "next_available_at": m.get("gm-reset-at"),
+        "reset_at": m.get("gm-reset-at"),
+        "models": {},
+        "_metadata_name": os.path.basename(cloud_file.name),
+        "_is_cloud_summary": True
+    }
+    
+    # Parse models (gm-q-flash -> models['Flash']['percent'])
+    for k, v in m.items():
+        if k.startswith("gm-q-"):
+            model_name = k[5:].capitalize()
+            try:
+                record["models"][model_name] = {"percent": int(v)}
+            except (ValueError, TypeError):
+                pass
+                
+    return record
+
+
+def load_cloud_snapshots(provider) -> List[SnapshotRecord]:
+    """
+    Loads all archival snapshots from the cloud provider.
+    Uses 'Shadow Metadata' (B2 File Info) to avoid downloads where possible.
+    """
+    records: List[SnapshotRecord] = []
+    
+    cloud_files = provider.list_files()
+    
+    # Optimization: We can't use prefix reliably with B2Manager list_files yet if it doesn't support it,
+    # but B2Manager list_files (Bucket.ls) is recursive anyway.
+    
+    with tempfile.TemporaryDirectory(prefix="gm-snapshots-") as tmp:
+        for item in cloud_files:
+            name = item.name
+            if not (name.endswith(".snapshot.json") or name.endswith(".metadata.json")):
+                continue
+                
+            # 1. Attempt to use Shadow Metadata
+            summary = parse_cloud_summary(item)
+            if summary:
+                records.append(summary)
+                continue
+                
+            # 2. Fallback to download if metadata headers are missing
+            local_path = os.path.join(tmp, os.path.basename(name))
+            try:
+                provider.download_file(name, local_path)
+                with open(local_path, "r", encoding="utf-8") as fh:
+                    data: SnapshotRecord = json.load(fh)
+                data["_metadata_name"] = os.path.basename(name)
+                data["_entity_type"] = "snapshot"
+                records.append(data)
+            except Exception:
+                continue
+    return records
+
+
+def load_cloud_states(provider) -> List[AccountState]:
+    """
+    Loads all account state files from the cloud provider.
+    Uses 'Shadow Metadata' (B2 File Info) to avoid downloads where possible.
+    """
+    records: List[AccountState] = []
+    
+    # States are stored under accounts/ prefix in cloud
+    cloud_files = provider.list_files(prefix="accounts/")
+    
+    with tempfile.TemporaryDirectory(prefix="gm-states-") as tmp:
+        for item in cloud_files:
+            name = item.name
+            if not name.endswith(".state.json"):
+                continue
+            
+            # 1. Attempt to use Shadow Metadata
+            summary = parse_cloud_summary(item)
+            if summary:
+                records.append(summary)
+                continue
+
+            # 2. Fallback to download
+            local_path = os.path.join(tmp, os.path.basename(name))
+            try:
+                provider.download_file(name, local_path)
+                with open(local_path, "r", encoding="utf-8") as fh:
+                    data: AccountState = json.load(fh)
+                data["_metadata_name"] = os.path.basename(name)
+                data["_entity_type"] = "state"
+                records.append(data)
+            except Exception:
+                continue
+    return records
+
+
+def get_cloud_summary(entity: Union[EntityRecord, ResetRecord]) -> Dict[str, str]:
+    """
+    Extract a compact summary for cloud metadata headers.
+    Headers must be strings.
+    """
+    summary = {
+        "gm-email": entity.get("email", "unknown"),
+        "gm-entity-type": entity.get("_entity_type", "unknown"),
+        "gm-captured-at": entity.get("captured_at") or entity.get("saved_at") or "",
+        "gm-reset-at": entity.get("next_available_at") or entity.get("reset_at") or entity.get("reset_ist") or "",
+    }
+    
+    models = entity.get("models")
+    if isinstance(models, dict):
+        for name, state in models.items():
+            # Use short keys to stay within header limits (B2 has 10 limit usually)
+            p = state.get("percent")
+            if p is not None:
+                summary[f"gm-q-{name.lower()}"] = str(p)
+                
+    return {k: v for k, v in summary.items() if v}
+
+
+def latest_entity_by_email(
+    records: List[Union[EntityRecord, ResetRecord, Dict[str, Any]]]
+) -> Dict[str, Union[EntityRecord, ResetRecord]]:
+    """
+    Find the most recent entity record (snapshot or state) for each unique email address,
     prioritizing records that contain detailed model quota information.
     """
-    latest: dict[str, dict[str, Any]] = {}
+    latest: Dict[str, Union[EntityRecord, ResetRecord]] = {}
     for record in records:
         email = record.get("email")
         if not email:
@@ -228,37 +477,64 @@ def latest_metadata_by_email(records: list[dict[str, Any]]) -> dict[str, dict[st
         key = email.lower()
         current = latest.get(key)
 
-        # Priority: updated_at > captured_at > saved_at > created_at
-        record_time = (
-            record.get("updated_at") or 
-            record.get("captured_at") or 
-            record.get("saved_at") or 
-            record.get("created_at") or 
-            ""
-        )
-        
-        has_models = bool(record.get("models"))
-        
         if current is None:
             latest[key] = record
             continue
 
-        current_time = (
-            current.get("updated_at") or 
-            current.get("captured_at") or 
-            current.get("saved_at") or 
-            current.get("created_at") or 
-            ""
-        )
-        current_has_models = bool(current.get("models"))
+        # 1. Compare Entity Class Priority
+        rec_type = record.get("_entity_type", "reset")
+        cur_type = current.get("_entity_type", "reset")
+        rec_prio = ENTITY_PRIORITY.get(rec_type, 0)
+        cur_prio = ENTITY_PRIORITY.get(cur_type, 0)
 
-        # Selection Logic:
-        # 1. Prefer records with models over those without.
-        # 2. If model-presence is equal, prefer the newer timestamp.
-        if has_models and not current_has_models:
+        # 2. Compare Model Richness
+        rec_has_models = bool(record.get("models"))
+        cur_has_models = bool(current.get("models"))
+
+        # 3. Compare Timestamp Freshness
+        # Priority: updated_at > captured_at > saved_at > created_at > reset_ist
+        def get_time(r):
+            return (
+                r.get("updated_at") or 
+                r.get("captured_at") or 
+                r.get("saved_at") or 
+                r.get("created_at") or 
+                r.get("reset_ist") or
+                ""
+            )
+        
+        rec_time = get_time(record)
+        cur_time = get_time(current)
+
+        # Ranking Heuristic:
+        # A. If priorities differ, take higher priority UNLESS lower priority has models and higher doesn't.
+        # B. If priorities same, take model-rich one.
+        # C. If model-status same, take newer one.
+
+        better = False
+        if rec_prio > cur_prio:
+            # Current is lower priority. We take record UNLESS current has models and record doesn't.
+            if cur_has_models and not rec_has_models:
+                better = False
+            else:
+                better = True
+        elif rec_prio < cur_prio:
+            # Record is lower priority. We only take it if it has models and current doesn't.
+            if rec_has_models and not cur_has_models:
+                better = True
+            else:
+                better = False
+        else:
+            # Same priority
+            if rec_has_models and not cur_has_models:
+                better = True
+            elif not rec_has_models and cur_has_models:
+                better = False
+            else:
+                # Same richness, take newer
+                better = rec_time > cur_time
+
+        if better:
             latest[key] = record
-        elif has_models == current_has_models:
-            if record_time > current_time:
-                latest[key] = record
                 
     return latest

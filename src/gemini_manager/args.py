@@ -197,16 +197,21 @@ def get_parser() -> argparse.ArgumentParser:
     # Doctor command
     subparsers.add_parser("doctor", help="Run system diagnostic check.")
 
-    # Prune command
-    prune_parser = subparsers.add_parser("prune", help="Prune old backups.")
-    prune_parser.add_argument("--keep", type=int, default=5, help="Number of recent backups to keep (default: 5)")
-    prune_parser.add_argument("--backup-dir", default=DEFAULT_BACKUP_DIR, help="Local backup directory (default: ~/.gemini-manager/backups)")
-    prune_parser.add_argument("--cloud", action="store_true", help="Prune both local AND cloud backups")
-    prune_parser.add_argument("--cloud-only", action="store_true", help="Only prune cloud backups")
-    prune_parser.add_argument("--dry-run", action="store_true", help="Show what would be deleted without doing it")
-    prune_parser.add_argument("--bucket", help="B2 Bucket Name")
-    prune_parser.add_argument("--b2-id", help="B2 Key ID")
-    prune_parser.add_argument("--b2-key", help="B2 App Key")
+    # Prune command (Workspace Pruning)
+    prune_parser = subparsers.add_parser("prune", help="Remove Gemini runtime state (tmp, history, logs) while preserving identity.")
+    prune_parser.add_argument("--src", default=DEFAULT_GEMINI_HOME, help=f"Gemini home directory to prune (default: {DEFAULT_GEMINI_HOME})")
+    prune_parser.add_argument("--dry-run", action="store_true", help="Show what would be removed without deleting anything")
+
+    # Prune Backups command (Backup Repo Pruning)
+    prune_backups_parser = subparsers.add_parser("prune-backups", help="Delete old backup archives and metadata.")
+    prune_backups_parser.add_argument("--backup-dir", default=DEFAULT_BACKUP_DIR, help=f"Local backup directory (default: {DEFAULT_BACKUP_DIR})")
+    prune_backups_parser.add_argument("--keep", type=int, help="Number of most recent backups to keep PER ACCOUNT")
+    prune_backups_parser.add_argument("--cloud", action="store_true", help="Prune backups from Cloud (B2) ONLY (does not prune local if set)")
+
+    prune_backups_parser.add_argument("--dry-run", action="store_true", help="Show what would be removed without deleting anything")
+    prune_backups_parser.add_argument("--bucket", help="B2 Bucket Name")
+    prune_backups_parser.add_argument("--b2-id", help="B2 Key ID")
+    prune_backups_parser.add_argument("--b2-key", help="B2 App Key")
 
     # Cooldown command
     cooldown_parser = subparsers.add_parser("cooldown", help="Show account cooldown status, with optional cloud sync.")

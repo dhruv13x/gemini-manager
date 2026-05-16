@@ -93,8 +93,9 @@ def test_list_files_success(s3_provider, mock_s3_client):
     assert len(files) == 2
     assert files[0].name == "file1.txt"
     assert files[0].size == 100
-    assert files[0].last_modified == datetime(2023, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+    assert files[0].last_modified == datetime(2023, 1, 1, 12, 0, 0, tzinfo=timezone.utc).timestamp()
     assert files[1].name == "folder/file2.txt"
+    assert files[1].last_modified == datetime(2023, 1, 2, 13, 0, 0, tzinfo=timezone.utc).timestamp()
 
 def test_list_files_no_contents(s3_provider, mock_s3_client):
     """Test listing files when 'Contents' key is missing."""
